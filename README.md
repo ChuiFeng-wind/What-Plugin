@@ -13,7 +13,11 @@
 ![数据](https://img.shields.io/badge/%E6%95%B0%E6%8D%AE-%E4%BB%85%E5%AD%98%E6%9C%AC%E6%9C%BA-2ea44f)
 [![许可](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF-GPL--3.0-blue)](LICENSE)
 
-[下载安装](#下载安装) · [功能一览](#功能一览) · [隐私与安全](#隐私与安全) · [常见问题](#常见问题) · [English](#english)
+[下载安装](#下载安装) · [界面预览](#界面预览) · [功能一览](#功能一览) · [隐私与安全](#隐私与安全) · [常见问题](#常见问题) · [English](#english)
+
+<br>
+
+<img src="docs/screenshots/plugins.png" alt="插件库：按功能分类浏览，右侧记录评分、使用感受和混音属性" width="100%">
 
 </div>
 
@@ -46,6 +50,24 @@ What Plugin 是一个做混音的人给自己写的工具，现在拿出来分�
 - 安装时如果 DAW 开着并且加载过 What Plugin Lookup，安装程序会提示你先关闭 DAW，或者跳过这次查询插件的更新。
 
 第一次打开时有欢迎页和逐项导览，跟着走一遍就能上手。
+
+## 界面预览
+
+> 截图里是演示数据。
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/notes.png" alt="混音笔记"><br><b>混音笔记</b>：效果链的每一步写首选、备选插件和思路</td>
+    <td width="50%"><img src="docs/screenshots/projects.png" alt="工程分析"><br><b>工程分析</b>：每个工程用了哪些插件，缺了哪个一眼看到</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/idle.png" alt="闲置报告"><br><b>闲置报告</b>：从没在工程里出现过、很久没用的插件</td>
+    <td width="50%"><img src="docs/screenshots/wishes.png" alt="心愿单"><br><b>心愿单</b>：想要程度、目标价，离目标价还差多少</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/tour.png" alt="新手指引"><br><b>新手指引</b>：第一次打开时逐项介绍每个页面</td>
+  </tr>
+</table>
 
 ## 功能一览
 
