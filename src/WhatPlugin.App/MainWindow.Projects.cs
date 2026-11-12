@@ -1,0 +1,535 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Input;
+using Microsoft.Win32;
+using WhatPlugin.Core;
+
+namespace WhatPlugin.App;
+
+/// <summary>工程反查、常用清单和闲置报告。工程文件只读，这里没有任何改动工程或插件文件的操作。</summary>
+public partial class MainWindow
+{
+    private ProjectReportResult _report = new([], [], new Dictionary<string, PluginUsage>());
+    private List<ProjectViewModel> _projects = [];
+    private List<MissingViewModel> _missing = [];
+
+    /// <summary>查“以前移进垃圾桶并卸载过”用的名称匹配，插件列表变了就重建。</summary>
+    private PluginNameMatcher? _rememberedMatcher;
+
+    private PluginNameMatcher RememberedMatcher => _rememberedMatcher ??= new PluginNameMatcher(_plugins.Select(p => p.Row));
+    private ICollectionView? _projectView;
+    private ICollectionView? _missingView;
+    private CancellationTokenSource? _projectCancel;
+    private bool _projectUiReady;
+
+    private List<FavoriteList> _lists = [];
+    private List<IdleViewModel> _idle = [];
+    private ICollectionView? _idleView;
+
+    private void InitializeProjects()
+    {
+        IdleMonths.ItemsSource = new[] { "6 个月", "12 个月", "24 个月", "36 个月" };
+        IdleMonths.SelectedIndex = 1;
+        ProjectSegmentAll.IsChecked = true;
+        _projectUiReady = true;
+        LoadProjectFolders();
+        InitializeInsights();
+        RefreshProjectReport();
+        LoadLists();
+        LoadChains();
+    }
+
+    /// <summary>安装情况、垃圾桶或工程变化后都要重算：缺失和闲置都依赖它们。</summary>
+    private void RefreshProjectReport()
+    {
+        if (!_projectUiReady)
+            return;
+        var selectedProject = (ProjectGrid.SelectedItem as ProjectViewModel)?.Entry.Key;
+        var selectedMissing = (MissingGrid.SelectedItem as MissingViewModel)?.Name;
+
+        _report = ProjectReport.Build(_database.LoadProjectFiles(), _database.LoadPlugins(), _database.LoadIgnoredProjectNames());
+        // 忽略的也算在内：把缺失的插件标成忽略，不算“补齐了”。
+        RecordUsage(() =>
+        {
+            foreach (var project in _report.Projects.Where(p => p.Status == ProjectScanStatus.Ok))
+                _database.RecordProjectMissing(project.Key, project.Plugins.Count(l => l.State is ProjectPluginState.Missing or ProjectPluginState.Ignored));
+        });
+        foreach (var plugin in _plugins)
+            plugin.Usage = _report.Usage.GetValueOrDefault(plugin.Row.Key);
+
+        _projects = _report.Projects.Select(p => new ProjectViewModel(p)).ToList();
+        RebuildProjectTree();
+        _projectView = CollectionViewSource.GetDefaultView(_projects);
+        _projectView.Filter = MatchesProject;
+        ProjectGrid.ItemsSource = _projectView;
+        ProjectGrid.SelectedItem = _projects.FirstOrDefault(p => p.Entry.Key == selectedProject);
+
+        _rememberedMatcher = null;
+        _missing = _report.Missing.Select(m => new MissingViewModel(m, TrashMemory.Find(m.Name, RememberedMatcher))).ToList();
+        _missingView = CollectionViewSource.GetDefaultView(_missing);
+        _missingView.Filter = MatchesMissing;
+        MissingGrid.ItemsSource = _missingView;
+        MissingGrid.SelectedItem = _missing.FirstOrDefault(m => m.Name == selectedMissing);
+
+        var withMissing = _projects.Count(p => p.MissingCount > 0);
+        CountProjects.Text = _projects.Count > 0 ? _projects.Count.ToString() : "";
+        ProjectSegmentMissing.Content = $"有缺失（{withMissing}）";
+        ProjectSegmentSummary.Content = $"缺失汇总（{_missing.Count}）";
+        ClearIgnoredButton.Visibility = _database.LoadIgnoredProjectNames().Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        RefreshIdle();
+        ShowListDetail();
+        ShowChainDetail();
+        RefreshHealth();
+        UpdateProjectEmpty();
+        ShowProjectDetail();
+    }
+
+    private void ShowProjectStatus()
+    {
+        StatusText.Text = _page switch
+        {
+            AppPage.Projects when _projects.Count == 0 => "工程文件只会被读取，不会被修改。",
+            AppPage.Projects => $"{_projects.Count} 个工程，{_projects.Count(p => p.MissingCount > 0)} 个有缺失，缺失插件 {_missing.Count} 种",
+            AppPage.Lists => DescribeLists(),
+            AppPage.Idle => DescribeIdle(),
+            AppPage.Chains => "混音笔记只是记录，不会写入 DAW",
+            AppPage.Health => DescribeHealth(),
+            _ => StatusText.Text,
+        };
+    }
+
+    // ---------- 工程文件夹和扫描 ----------
+
+    private void LoadProjectFolders()
+    {
+        var folders = _database.LoadProjectFolders();
+        ProjectFolderList.ItemsSource = folders;
+        ProjectFolderList.Visibility = folders.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ProjectScanButton.IsEnabled = folders.Count > 0 && _projectCancel == null;
+    }
+
+    private void AddProjectFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog { Title = "选择存放工程的文件夹", Multiselect = true };
+        if (dialog.ShowDialog(this) != true)
+            return;
+        foreach (var folder in dialog.FolderNames)
+            _database.AddProjectFolder(folder);
+        LoadProjectFolders();
+        _ = RunProjectScanAsync();
+    }
+
+    private void RemoveProjectFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is not string folder)
+            return;
+        _database.RemoveProjectFolder(folder);
+        LoadProjectFolders();
+        // 只从软件里忘掉这个文件夹的统计，工程文件不动。
+        _ = RunProjectScanAsync();
+    }
+
+    private void ProjectScan_Click(object sender, RoutedEventArgs e) => _ = RunProjectScanAsync();
+
+    private void ProjectCancel_Click(object sender, RoutedEventArgs e)
+    {
+        _projectCancel?.Cancel();
+        ProjectCancelButton.IsEnabled = false;
+        StatusText.Text = "正在停止…";
+    }
+
+    private async Task RunProjectScanAsync()
+    {
+        if (_projectCancel != null)
+            return;
+        _projectCancel = new CancellationTokenSource();
+        SetProjectScanning(true);
+        var progress = new Progress<ProjectScanProgress>(p =>
+        {
+            ScanProgressBar.Maximum = Math.Max(p.Total, 1);
+            ScanProgressBar.Value = p.Done;
+            if (_page == AppPage.Projects && p.Current != null)
+                StatusText.Text = $"正在读取工程 {p.Done}/{p.Total}：{Path.GetFileName(p.Current)}";
+        });
+
+        try
+        {
+            var token = _projectCancel.Token;
+            var summary = await Task.Run(() => ProjectScanner.Scan(_database, progress, token), CancellationToken.None);
+            RefreshProjectReport();
+            StatusText.Text = DescribeProjectScan(summary);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            StatusText.Text = "读取工程出错：" + error.Message;
+        }
+        finally
+        {
+            _projectCancel.Dispose();
+            _projectCancel = null;
+            SetProjectScanning(false);
+        }
+    }
+
+    private string DescribeProjectScan(ProjectScanSummary s)
+    {
+        var parts = new List<string>
+        {
+            s.Cancelled ? "已停止" : "工程读取完成",
+            $"找到 {s.Found} 个工程文件，合并为 {_projects.Count} 个工程",
+            $"本次读取 {s.Parsed} 个，未变化 {s.Unchanged} 个",
+        };
+        if (s.Failed > 0)
+            parts.Add($"{s.Failed} 个读取失败");
+        if (s.Removed > 0)
+            parts.Add($"移除 {s.Removed} 条已不存在的记录");
+        return string.Join("，", parts);
+    }
+
+    private void SetProjectScanning(bool scanning)
+    {
+        ProjectCancelButton.Visibility = scanning ? Visibility.Visible : Visibility.Collapsed;
+        ProjectCancelButton.IsEnabled = scanning;
+        ProjectAddFolderButton.IsEnabled = !scanning;
+        ProjectFolderList.IsEnabled = !scanning;
+        ProjectScanButton.IsEnabled = !scanning && _database.LoadProjectFolders().Count > 0;
+        ScanProgressBar.Visibility = scanning ? Visibility.Visible : Visibility.Collapsed;
+        if (scanning)
+            ScanProgressBar.Value = 0;
+    }
+
+    // ---------- 工程列表 ----------
+
+    private bool ShowingMissingSummary => ProjectSegmentSummary.IsChecked == true;
+
+    private bool MatchesProject(object item)
+    {
+        var project = (ProjectViewModel)item;
+        return MatchesProjectFilters(project)
+            && (_projectFolderFilter == null || ProjectFolderTree.Contains(_projectFolderFilter, project.Folder));
+    }
+
+    private bool MatchesProjectFilters(ProjectViewModel project)
+    {
+        if (ProjectSegmentMissing.IsChecked == true && project.MissingCount == 0)
+            return false;
+        return MatchesSearch(project.SearchText);
+    }
+
+    private bool MatchesMissing(object item) => MatchesSearch(((MissingViewModel)item).SearchText);
+
+    private bool MatchesSearch(string text)
+    {
+        var search = ProjectSearchBox.Text.Trim().ToLowerInvariant();
+        return search.Length == 0 || search.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(text.Contains);
+    }
+
+    private void ProjectFilter_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_projectUiReady)
+            return;
+        RebuildProjectTree();
+        ProjectGrid.Visibility = ShowingMissingSummary ? Visibility.Collapsed : Visibility.Visible;
+        MissingGrid.Visibility = ShowingMissingSummary ? Visibility.Visible : Visibility.Collapsed;
+        _projectView?.Refresh();
+        _missingView?.Refresh();
+        UpdateProjectEmpty();
+        ShowProjectDetail();
+    }
+
+    private void UpdateProjectEmpty()
+    {
+        var shown = ShowingMissingSummary
+            ? _missingView?.Cast<object>().Count() ?? 0
+            : _projectView?.Cast<object>().Count() ?? 0;
+        ProjectEmpty.Visibility = shown == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ProjectEmptyText.Text =
+            _database.LoadProjectFolders().Count == 0 ? "点右上角“添加文件夹”，选择存放工程的位置"
+            : _projects.Count == 0 ? "这些文件夹里没有找到工程"
+            : ShowingMissingSummary && _missing.Count == 0 ? "没有缺失的插件"
+            : ProjectSegmentMissing.IsChecked == true && !_projects.Any(p => p.MissingCount > 0) ? "所有工程需要的插件都装了"
+            : _projectFolderFilter != null ? "这个文件夹里没有符合条件的工程"
+            : "没有符合搜索的工程";
+    }
+
+    private void ProjectSelection_Changed(object sender, SelectionChangedEventArgs e) => ShowProjectDetail();
+
+    private void ShowProjectDetail()
+    {
+        var project = ShowingMissingSummary ? null : ProjectGrid.SelectedItem as ProjectViewModel;
+        var missing = ShowingMissingSummary ? MissingGrid.SelectedItem as MissingViewModel : null;
+        ProjectDetailEmpty.Visibility = project == null && missing == null ? Visibility.Visible : Visibility.Collapsed;
+        ProjectDetailPanel.Visibility = project != null ? Visibility.Visible : Visibility.Collapsed;
+        MissingDetailPanel.Visibility = missing != null ? Visibility.Visible : Visibility.Collapsed;
+
+        if (project != null)
+        {
+            var entry = project.Entry;
+            ProjectDetailTitle.Text = entry.Name;
+            ProjectDetailMeta.Text = $"{project.HostText}，最近修改 {project.ModifiedText}"
+                + (entry.Versions > 1 ? $"，共 {entry.Versions} 个版本，下面是最新版本" : "");
+            ProjectDetailPath.Text = entry.Path;
+            ProjectDetailError.Visibility = entry.Error != null ? Visibility.Visible : Visibility.Collapsed;
+            ProjectDetailError.Text = entry.Error != null ? "无法读取：" + entry.Error : "";
+
+            var third = entry.Plugins.Where(p => p.State is ProjectPluginState.Installed or ProjectPluginState.Missing)
+                .Select(p => new ProjectLineViewModel(p, p.State == ProjectPluginState.Missing ? TrashMemory.Find(p.Name, RememberedMatcher) : null)).ToList();
+            ProjectDetailLines.ItemsSource = third;
+            var stock = entry.Plugins.Where(p => p.State == ProjectPluginState.Stock).Select(p => p.Name).ToList();
+            var ignored = entry.Plugins.Where(p => p.State == ProjectPluginState.Ignored).Select(p => p.Name).ToList();
+            var notes = new List<string>();
+            if (third.Count == 0 && entry.Error == null)
+                notes.Add("这个工程没有用到第三方效果器。");
+            if (stock.Count > 0)
+                notes.Add($"宿主自带（不算缺失）：{string.Join("、", stock)}");
+            if (ignored.Count > 0)
+                notes.Add($"已设为不算缺失：{string.Join("、", ignored)}");
+            ProjectDetailNotes.Text = string.Join("\n", notes);
+            ProjectDetailNotes.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        if (missing != null)
+        {
+            MissingDetailTitle.Text = missing.Name;
+            MissingDetailMeta.Text = $"{missing.ProjectCount} 个工程的最新版本需要它";
+            MissingDetailProjects.ItemsSource = missing.Summary.Projects
+                .Select(p => $"{p.ModifiedUtc.ToLocalTime():yyyy-MM-dd}  {p.Name}").ToList();
+        }
+    }
+
+    private void OpenProjectFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProjectGrid.SelectedItem is ProjectViewModel project)
+            RevealFile(project.Entry.Path);
+    }
+
+    private void IgnoreLine_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is string name)
+            IgnoreMissingName(name);
+    }
+
+    private void IgnoreMissing_Click(object sender, RoutedEventArgs e)
+    {
+        if (MissingGrid.SelectedItem is MissingViewModel missing)
+            IgnoreMissingName(missing.Name);
+    }
+
+    private void IgnoreMissingName(string name)
+    {
+        _database.IgnoreProjectName(name);
+        RefreshProjectReport();
+        StatusText.Text = $"“{name}”不再算作缺失，可以点“恢复忽略的名称”撤销";
+    }
+
+    private void ClearIgnored_Click(object sender, RoutedEventArgs e)
+    {
+        _database.ClearIgnoredProjectNames();
+        RefreshProjectReport();
+        StatusText.Text = "已恢复所有忽略的名称";
+    }
+
+    // 常用清单的页面在 MainWindow.Lists.cs。
+
+    /// <summary>插件详情里的“加入清单”。</summary>
+    private void AddCurrentToList_Click(object sender, RoutedEventArgs e)
+    {
+        if (_current == null)
+            return;
+        var menu = new ContextMenu { PlacementTarget = (UIElement)sender };
+        foreach (var list in _lists)
+        {
+            var isIn = list.PluginKeys.Contains(_current.Row.Key);
+            var item = new MenuItem { Header = list.Name, IsCheckable = true, IsChecked = isIn };
+            var target = list;
+            // 用状态事件而不是 Click：辅助功能切换时不会触发 Click。初始状态已设好，不会误触发。
+            item.Checked += (_, _) => ToggleCurrentInList(target);
+            item.Unchecked += (_, _) => ToggleCurrentInList(target);
+            menu.Items.Add(item);
+        }
+        if (_lists.Count > 0)
+            menu.Items.Add(new Separator());
+        var create = new MenuItem { Header = "新建清单…" };
+        create.Click += (_, _) => CreateListWithCurrent();
+        menu.Items.Add(create);
+        menu.IsOpen = true;
+    }
+
+    private void ToggleCurrentInList(FavoriteList list)
+    {
+        if (_current == null)
+            return;
+        var key = _current.Row.Key;
+        var isIn = list.PluginKeys.Contains(key);
+        if (isIn)
+            _database.RecordFavoriteRemoval(list.Id, key);
+        _database.SetFavoriteItems(list.Id, isIn ? list.PluginKeys.Where(k => k != key) : [.. list.PluginKeys, key]);
+        LoadLists();
+        ShowUsageDetail(_current.Row);
+        StatusText.Text = isIn ? $"已从“{list.Name}”移除 {_current.Name}" : $"已把 {_current.Name} 加入“{list.Name}”";
+    }
+
+    private void CreateListWithCurrent()
+    {
+        if (_current == null)
+            return;
+        var name = Dialogs.Prompt(this, "新建清单", "清单名称，例如：人声常用", "创建", "");
+        if (name == null)
+            return;
+        try
+        {
+            var list = _database.AddFavoriteList(name);
+            _database.SetFavoriteItems(list.Id, [_current.Row.Key]);
+            LoadLists(list.Id);
+            ShowUsageDetail(_current.Row);
+            StatusText.Text = $"已新建“{list.Name}”并加入 {_current.Name}";
+        }
+        catch (ArgumentException error)
+        {
+            StatusText.Text = error.Message;
+        }
+    }
+
+    /// <summary>插件详情里的工程使用情况和所在清单。</summary>
+    private void ShowUsageDetail(PluginRow row)
+    {
+        var usage = _report.Usage.GetValueOrDefault(row.Key);
+        DetailUsage.Text = UsageLabels.Summary(usage);
+        DetailUsage.ToolTip = usage == null ? null : string.Join("\n", usage.ProjectNames.Take(30));
+        var lists = _lists.Where(l => l.PluginKeys.Contains(row.Key)).Select(l => l.Name).ToList();
+        DetailLists.Text = lists.Count > 0 ? "所在清单：" + string.Join("、", lists) : "";
+        DetailLists.Visibility = lists.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ShowPluginInLibrary(string key)
+    {
+        var plugin = _plugins.FirstOrDefault(p => p.Row.Key == key);
+        if (plugin == null)
+            return;
+        (plugin.IsBlacklisted ? NavBlacklist : NavPlugins).IsChecked = true;
+        ExitRecommendation();
+        ClearFilters_Click(this, new RoutedEventArgs());
+        PluginGrid.SelectedItem = plugin;
+        PluginGrid.ScrollIntoView(plugin);
+    }
+
+    // ---------- 闲置报告 ----------
+
+    private int IdleMonthCount => IdleMonths.SelectedIndex switch { 0 => 6, 2 => 24, 3 => 36, _ => 12 };
+
+    private void RefreshIdle()
+    {
+        if (!_projectUiReady)
+            return;
+        var selected = IdleGrid.SelectedItems.OfType<IdleViewModel>().Select(i => i.Row.Key).ToHashSet();
+        _idle = ProjectReport.FindIdle(_plugins.Select(p => p.Row), _report.Usage, IdleMonthCount, DateTime.UtcNow)
+            .Select(i => new IdleViewModel(i)).ToList();
+        _idleView = CollectionViewSource.GetDefaultView(_idle);
+        _idleView.Filter = MatchesIdle;
+        IdleGrid.ItemsSource = _idleView;
+        foreach (var item in _idle.Where(i => selected.Contains(i.Row.Key)))
+            IdleGrid.SelectedItems.Add(item);
+        CountIdle.Text = _report.Projects.Count > 0 && _idle.Count > 0 ? _idle.Count.ToString() : "";
+        UpdateIdleEmpty();
+    }
+
+    private bool MatchesIdle(object item)
+    {
+        var idle = (IdleViewModel)item;
+        if (IdleSegmentNever.IsChecked == true && idle.Idle.Reason != IdleReason.NeverUsed)
+            return false;
+        if (IdleSegmentOld.IsChecked == true && idle.Idle.Reason != IdleReason.LongUnused)
+            return false;
+        var search = IdleSearchBox.Text.Trim().ToLowerInvariant();
+        return search.Length == 0 || search.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(idle.SearchText.Contains);
+    }
+
+    private void IdleOption_Changed(object sender, SelectionChangedEventArgs e) => RefreshIdleAndStatus();
+
+    private void IdleFilter_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_projectUiReady)
+            return;
+        _idleView?.Refresh();
+        UpdateIdleEmpty();
+    }
+
+    private void RefreshIdleAndStatus()
+    {
+        RefreshIdle();
+        if (_page == AppPage.Idle)
+            ShowProjectStatus();
+    }
+
+    private void UpdateIdleEmpty()
+    {
+        var noProjects = _report.Projects.Count == 0;
+        IdleGrid.Visibility = noProjects ? Visibility.Collapsed : Visibility.Visible;
+        var shown = _idleView?.Cast<object>().Count() ?? 0;
+        IdleEmpty.Visibility = noProjects || shown == 0 ? Visibility.Visible : Visibility.Collapsed;
+        IdleEmptyText.Text = noProjects
+            ? "先到“工程”页扫描工程，才知道哪些插件没用过"
+            : _idle.Count == 0 ? "没有闲置的插件" : "没有符合筛选的插件";
+    }
+
+    private string DescribeIdle()
+    {
+        var never = _idle.Count(i => i.Idle.Reason == IdleReason.NeverUsed);
+        return _report.Projects.Count == 0
+            ? "闲置报告依据工程扫描结果"
+            : $"依据 {_report.Projects.Count} 个工程：{never} 款从未出现，{_idle.Count - never} 款超过 {IdleMonthCount} 个月没用";
+    }
+
+    private void IdleGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var count = IdleGrid.SelectedItems.Count;
+        IdleBlacklistButton.IsEnabled = count > 0;
+        IdleBlacklistButton.Content = count > 0 ? $"把选中的 {count} 款移入垃圾桶…" : "把选中的插件移入垃圾桶…";
+    }
+
+    private void IdleGrid_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (IdleGrid.SelectedItem is IdleViewModel item)
+            ShowPluginInLibrary(item.Row.Key);
+    }
+
+    private void IdleBlacklist_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = IdleGrid.SelectedItems.OfType<IdleViewModel>().ToList();
+        if (selected.Count == 0)
+            return;
+        var reason = Dialogs.Prompt(this, "移入垃圾桶",
+            $"把选中的 {selected.Count} 款插件移入垃圾桶。只是在本软件中隐藏，文件不动，DAW 里仍可使用。\n移入原因（选填）：",
+            "移入垃圾桶", "", danger: true, allowEmpty: true);
+        if (reason == null)
+            return;
+
+        try
+        {
+            foreach (var item in selected)
+            {
+                var user = item.Row.User;
+                var text = reason.Trim();
+                // 没填原因时保留之前写过的。
+                _database.SaveUserData(item.Row.Id, user with
+                {
+                    Hidden = true,
+                    BlacklistReason = text.Length > 0 ? text : user.BlacklistReason,
+                });
+            }
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException error)
+        {
+            StatusText.Text = "保存失败：" + error.Message;
+            return;
+        }
+
+        LoadPlugins();
+        StatusText.Text = $"已把 {selected.Count} 款插件移入垃圾桶，可在左侧“垃圾桶”查看或恢复";
+    }
+}

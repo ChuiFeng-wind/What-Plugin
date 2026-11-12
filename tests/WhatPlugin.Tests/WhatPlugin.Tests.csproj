@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
+    <ProjectReference Include="..\..\src\WhatPlugin.Core\WhatPlugin.Core.csproj" />
+  </ItemGroup>
+  <!-- 成就包不在公开仓库里：没有它的源码时，跳过引用和它的测试。 -->
+  <PropertyGroup>
+    <HasAchievements Condition="Exists('..\..\src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj')">true</HasAchievements>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(HasAchievements)' == 'true'">
+    <ProjectReference Include="..\..\src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(HasAchievements)' != 'true'">
+    <Compile Remove="AchievementTests.cs" />
+  </ItemGroup>
+</Project>

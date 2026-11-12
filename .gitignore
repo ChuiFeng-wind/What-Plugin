@@ -1,0 +1,21 @@
+# 编译输出
+bin/
+obj/
+*.user
+.vs/
+
+# 试用库、界面测试和扫描样例：里面有本机插件清单和测试账号，不进仓库
+build/
+*.db
+*.db-shm
+*.db-wal
+
+# 打包好的安装包和发布目录，放到 GitHub Release 里备份，不放进代码历史
+dist/
+installer/Output/
+
+# 备份导出文件可能含加密的账号密码
+WhatPlugin-备份-*.json
+
+# 各版本安装包的本地存档（GitHub Release 里也有）
+releases/

@@ -1,0 +1,55 @@
+<Window x:Class="WhatPlugin.App.UninstallHistoryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="卸载历史" Width="700" Height="680" Style="{StaticResource DialogWindow}">
+    <Border BorderBrush="{DynamicResource LineStrong}" BorderThickness="1">
+        <DockPanel Margin="24,20,24,20">
+            <StackPanel DockPanel.Dock="Top">
+                <TextBlock Text="卸载历史" FontSize="19" FontWeight="SemiBold"/>
+                <TextBlock Style="{StaticResource SmallNote}" Margin="0,4,0,12" TextWrapping="Wrap"
+                           Text="垃圾桶里卸载掉的插件都记在这里，插件记录删了也还在。卸载原因可以直接改，离开输入框就保存。以后想再加入心愿单时，会拿这里的原因提醒你。"/>
+                <TextBox x:Name="SearchBox" TextChanged="Search_Changed" Tag="搜索插件名、厂家或原因" AutomationProperties.Name="搜索卸载历史" Margin="0,0,0,10"/>
+            </StackPanel>
+
+            <DockPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+                <Button x:Name="CloseButton" DockPanel.Dock="Right" Content="关闭" IsCancel="True" IsDefault="True" MinWidth="76" Click="Close_Click"/>
+                <TextBlock x:Name="SummaryText" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+
+            <Grid>
+                <TextBlock x:Name="EmptyText" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Visibility="Collapsed"
+                           Text="还没有卸载记录。在垃圾桶里选中插件点“卸载”，或在本软件外卸载后重新扫描，都会记到这里。"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                    <ItemsControl x:Name="HistoryList" Focusable="False" AutomationProperties.Name="卸载记录">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Card}" Padding="14,12" Margin="0,0,8,10">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right" Content="删除" Style="{StaticResource GhostButton}" Click="Delete_Click" VerticalAlignment="Top"
+                                                    AutomationProperties.Name="{Binding DeleteName}"/>
+                                            <Border DockPanel.Dock="Right" Visibility="{Binding BackVisibility}" Background="{DynamicResource Surface}" CornerRadius="6"
+                                                    Padding="7,2" Margin="0,0,8,0" VerticalAlignment="Top" ToolTip="同名的插件现在又装着">
+                                                <TextBlock Text="已装回" FontSize="12" Foreground="{DynamicResource Accent}"/>
+                                            </Border>
+                                            <TextBlock TextWrapping="Wrap">
+                                                <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                <Run Text="{Binding Vendor, Mode=OneWay}" FontSize="12" Foreground="{DynamicResource Muted}"/>
+                                            </TextBlock>
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding When}" Style="{StaticResource SmallNote}" Margin="0,3,0,0"/>
+                                        <TextBlock Text="卸载原因" Style="{StaticResource FieldLabel}" Margin="0,10,0,4"/>
+                                        <TextBox Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" MaxLength="500" TextWrapping="Wrap" AcceptsReturn="False"
+                                                 Tag="{Binding ReasonHint}" AutomationProperties.Name="{Binding ReasonName}"/>
+                                        <TextBlock Text="{Binding Snapshot}" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                                   Visibility="{Binding SnapshotVisibility}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </DockPanel>
+    </Border>
+</Window>

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <Version>1.2.6</Version>
+    <Product>What Plugin</Product>
+    <Company>What Plugin</Company>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>WhatPlugin</AssemblyName>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="app.ico" />
+    <Resource Include="logo.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WhatPlugin.Core\WhatPlugin.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('..\..\build\scanner\WhatPluginScanner_artefacts\Release\WhatPluginScanner.exe')">
+    <None Include="..\..\build\scanner\WhatPluginScanner_artefacts\Release\WhatPluginScanner.exe" Link="WhatPluginScanner.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

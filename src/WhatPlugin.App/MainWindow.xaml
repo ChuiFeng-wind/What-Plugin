@@ -1,0 +1,1998 @@
+<Window x:Class="WhatPlugin.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:local="clr-namespace:WhatPlugin.App"
+        Title="What Plugin" Width="1400" Height="860" MinWidth="1120" MinHeight="640"
+        Background="{DynamicResource Bg1}" Foreground="{DynamicResource Text}"
+        FontFamily="{StaticResource UiFont}" FontSize="13" WindowStartupLocation="CenterScreen" Icon="app.ico">
+    <Window.Resources>
+        <DataTemplate x:Key="ScanFolderTemplate" DataType="{x:Type local:ScanFolderRow}">
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="0,7">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE711;" Tag="{Binding Path}" Click="RemoveVst2Folder_Click" Margin="8,0,0,0" Width="26" Height="26"
+                            Visibility="{Binding RemoveVisibility}" AutomationProperties.Name="{Binding Path, StringFormat=移除文件夹 {0}}" ToolTip="不再读取这个文件夹，插件文件不受影响"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Note}" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    <TextBlock Text="{Binding Path}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="38" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Grid x:Name="RootFrame">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- 侧边栏 -->
+        <Border Background="{DynamicResource Bg0}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
+            <DockPanel Margin="14,0,14,14">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,18,0,26">
+                    <!-- 和应用图标同一个标志 -->
+                    <Border Width="30" Height="30" CornerRadius="8" AutomationProperties.Name="What Plugin 标志">
+                        <Border.Background>
+                            <ImageBrush ImageSource="logo.png" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Border.Background>
+                    </Border>
+                    <TextBlock Text="What Plugin" FontSize="16" FontWeight="SemiBold" Margin="11,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Bottom">
+                    <Button x:Name="ExportButton" Style="{StaticResource GhostButton}" Click="Export_Click" HorizontalContentAlignment="Left"
+                            AutomationProperties.Name="导出备份" ToolTip="保存评分、备注、标签、混音属性、垃圾桶、常用清单、插件链和心愿单，不含账号密码">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE896;" Margin="0,0,10,0"/>
+                            <TextBlock Text="导出备份"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ImportButton" Style="{StaticResource GhostButton}" Click="Import_Click" Margin="0,2,0,0" HorizontalContentAlignment="Left"
+                            AutomationProperties.Name="导入备份" ToolTip="从备份文件恢复，会覆盖相同插件的现有内容">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE898;" Margin="0,0,10,0"/>
+                            <TextBlock Text="导入备份"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <StackPanel>
+                    <!-- 可以拖动、右键或 Alt+上下键调整顺序；“设置”固定在最下面。 -->
+                    <StackPanel x:Name="NavList" Background="Transparent" AllowDrop="True"
+                                PreviewMouseLeftButtonDown="NavList_MouseDown" PreviewMouseMove="NavList_MouseMove"
+                                DragOver="NavList_DragOver" DragLeave="NavList_DragLeave" Drop="NavList_Drop"
+                                ContextMenuOpening="NavList_ContextMenuOpening" PreviewKeyDown="NavList_KeyDown">
+                    <RadioButton x:Name="NavPlugins" Style="{StaticResource NavItem}" Tag="Plugins" Checked="Nav_Checked" AutomationProperties.Name="插件库">
+                        <DockPanel>
+                            <TextBlock x:Name="CountPlugins" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8F1;" Margin="0,0,12,0"/>
+                            <TextBlock Text="插件库" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavProjects" Style="{StaticResource NavItem}" Tag="Projects" Checked="Nav_Checked" AutomationProperties.Name="工程">
+                        <DockPanel>
+                            <TextBlock x:Name="CountProjects" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" Margin="0,0,12,0"/>
+                            <TextBlock Text="工程" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavLists" Style="{StaticResource NavItem}" Tag="Lists" Checked="Nav_Checked" AutomationProperties.Name="常用清单">
+                        <DockPanel>
+                            <TextBlock x:Name="CountLists" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE728;" Margin="0,0,12,0"/>
+                            <TextBlock Text="常用清单" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavChains" Style="{StaticResource NavItem}" Tag="Chains" Checked="Nav_Checked" AutomationProperties.Name="混音笔记">
+                        <DockPanel>
+                            <TextBlock x:Name="CountChains" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE71B;" Margin="0,0,12,0"/>
+                            <TextBlock Text="混音笔记" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavIdle" Style="{StaticResource NavItem}" Tag="Idle" Checked="Nav_Checked" AutomationProperties.Name="闲置报告">
+                        <DockPanel>
+                            <TextBlock x:Name="CountIdle" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE823;" Margin="0,0,12,0"/>
+                            <TextBlock Text="闲置报告" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavHealth" Style="{StaticResource NavItem}" Tag="Health" Checked="Nav_Checked" AutomationProperties.Name="健康检查">
+                        <DockPanel>
+                            <TextBlock x:Name="CountHealth" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE9D9;" Margin="0,0,12,0"/>
+                            <TextBlock Text="健康检查" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavWishes" Style="{StaticResource NavItem}" Tag="Wishes" Checked="Nav_Checked" AutomationProperties.Name="心愿单">
+                        <DockPanel>
+                            <TextBlock x:Name="CountWishes" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xEB51;" Margin="0,0,12,0"/>
+                            <TextBlock Text="心愿单" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavAccounts" Style="{StaticResource NavItem}" Tag="Accounts" Checked="Nav_Checked" AutomationProperties.Name="已购账号">
+                        <DockPanel>
+                            <TextBlock x:Name="CountAccounts" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8D7;" Margin="0,0,12,0"/>
+                            <TextBlock Text="已购账号" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavBlacklist" Style="{StaticResource NavItem}" Tag="Blacklist" Checked="Nav_Checked" AutomationProperties.Name="垃圾桶">
+                        <DockPanel>
+                            <TextBlock x:Name="CountBlacklist" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" Margin="0,0,12,0"/>
+                            <TextBlock Text="垃圾桶" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    </StackPanel>
+                    <Border Height="1" Background="{DynamicResource Line}" Margin="6,10"/>
+                    <RadioButton x:Name="NavSettings" Style="{StaticResource NavItem}" Tag="Settings" Checked="Nav_Checked" AutomationProperties.Name="设置">
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE713;" Margin="0,0,12,0"/>
+                            <TextBlock Text="设置" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- 右侧内容 -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <Button Style="{StaticResource WindowButton}" Content="&#xE921;" Click="Minimize_Click" AutomationProperties.Name="最小化"/>
+                <Button x:Name="MaximizeButton" Style="{StaticResource WindowButton}" Content="&#xE922;" Click="Maximize_Click" AutomationProperties.Name="最大化"/>
+                <Button x:Name="CloseButton" Style="{StaticResource CloseWindowButton}" Content="&#xE8BB;" Click="CloseWindow_Click" AutomationProperties.Name="关闭"/>
+            </StackPanel>
+
+            <!-- 插件库和垃圾桶共用这一页 -->
+            <Grid x:Name="PluginPage" Grid.Row="1" Margin="28,0,24,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <DockPanel Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock x:Name="PluginPageTitle" Text="插件库" Style="{StaticResource PageTitle}"/>
+                        <TextBlock x:Name="PluginPageSubtitle" Style="{StaticResource PageSubtitle}"/>
+                    </StackPanel>
+                </DockPanel>
+
+                <Border x:Name="RecommendBar" Grid.Row="1" Style="{StaticResource Card}" Padding="6" Margin="0,0,0,12">
+                    <DockPanel>
+                        <Button x:Name="RecommendButton" DockPanel.Dock="Right" Content="推荐" Style="{StaticResource PrimaryButton}" Click="Recommend_Click" Height="38" Padding="22,0" Margin="6,0,0,0"/>
+                        <Button x:Name="ExitRecommendButton" DockPanel.Dock="Right" Content="退出推荐" Click="ExitRecommend_Click" Height="38" Margin="6,0,0,0" Visibility="Collapsed"/>
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE82F;" FontSize="16" Foreground="{DynamicResource Accent}" Margin="12,0,4,0"/>
+                        <TextBox x:Name="NeedBox" KeyDown="NeedBox_KeyDown" BorderThickness="0" Background="Transparent" FontSize="14"
+                                 AutomationProperties.Name="描述你需要的功能"
+                                 Tag="描述你需要的功能，例如：人声去齿音、Waves 的压缩、低延迟的人声压缩、延迟 不要磁带"/>
+                    </DockPanel>
+                </Border>
+
+                <Border x:Name="TrashBar" Grid.Row="1" Style="{StaticResource Card}" Padding="14,8" Margin="0,0,0,12" Visibility="Collapsed">
+                    <DockPanel>
+                        <Button x:Name="UninstallButton" DockPanel.Dock="Right" Content="卸载选中的插件…" Style="{StaticResource DangerButton}" Click="Uninstall_Click" IsEnabled="False" Margin="6,0,0,0"/>
+                        <Button x:Name="RemovedFilesButton" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Click="RemovedFiles_Click" Visibility="Collapsed"/>
+                        <Button x:Name="UninstallHistoryButton" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Click="UninstallHistory_Click" Content="卸载历史"
+                                ToolTip="卸载过的插件：什么时候卸载、怎么卸载、为什么卸载"/>
+                        <TextBlock Style="{StaticResource SmallNote}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                   Text="按住 Ctrl 或 Shift 可以多选。只有点“卸载”才会动文件，不会自动清空。"/>
+                    </DockPanel>
+                </Border>
+
+                <Grid x:Name="FilterRow" Grid.Row="2" Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" Tag="搜索插件名、厂家、分类、标签或备注" AutomationProperties.Name="搜索插件名、厂家、分类、标签或备注"/>
+                    <ComboBox x:Name="VendorFilter" Grid.Column="1" Margin="8,0,0,0" SelectionChanged="Filter_Changed" AutomationProperties.Name="厂家"/>
+                    <ComboBox x:Name="FormatFilter" Grid.Column="2" Margin="8,0,0,0" SelectionChanged="Filter_Changed" AutomationProperties.Name="格式"/>
+                    <ComboBox x:Name="RatingFilter" Grid.Column="3" Margin="8,0,0,0" SelectionChanged="Filter_Changed" AutomationProperties.Name="评分"/>
+                    <Button Grid.Column="4" Content="清除筛选" Style="{StaticResource GhostButton}" Click="ClearFilters_Click" Margin="6,0,0,0"/>
+                </Grid>
+
+                <Grid Grid.Row="3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="176"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="372"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border x:Name="CategoryPanel" Style="{StaticResource Card}" Margin="0,6,14,0">
+                        <DockPanel>
+                        <Grid DockPanel.Dock="Top" Margin="8,8,8,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition/>
+                            </Grid.ColumnDefinitions>
+                            <RadioButton x:Name="CategoryFunctionToggle" GroupName="CategoryMode" Style="{StaticResource Segment}" Content="功能分类" IsChecked="True" Padding="4,5" Margin="0,0,3,0"
+                                         Checked="CategoryMode_Changed" ToolTip="按功能分类：EQ、压缩、混响…"/>
+                            <RadioButton x:Name="CategoryTimbreToggle" Grid.Column="1" GroupName="CategoryMode" Style="{StaticResource Segment}" Content="音色分类" Padding="4,5" Margin="3,0,0,0"
+                                         Checked="CategoryMode_Changed" ToolTip="按音色分类：人声、鼓、吉他…"/>
+                        </Grid>
+                        <ListBox x:Name="CategoryList" Margin="8" ItemContainerStyle="{StaticResource CategoryItem}" SelectionChanged="LibraryCategory_Changed"
+                                 AutomationProperties.Name="分类" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <DataGrid x:Name="PluginGrid" Grid.Column="1" RowHeight="52" SelectionMode="Single" SelectionChanged="PluginGrid_SelectionChanged" SizeChanged="PluginGrid_SizeChanged">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="插件" SortMemberPath="Name" Width="2*" MinWidth="150" ClipboardContentBinding="{Binding Name}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel VerticalAlignment="Center" Opacity="{Binding RowOpacity}">
+                                            <DockPanel>
+                                                <Border DockPanel.Dock="Right" Background="{DynamicResource DangerSoft}" CornerRadius="5" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding UninstalledVisibility}"
+                                                        ToolTip="已经卸载，留着当时的原因和评价备忘">
+                                                    <TextBlock Text="已卸载" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding Vendor}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="功能分类" SortMemberPath="TagsText" Width="1.6*" MinWidth="110">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ItemsControl ItemsSource="{Binding TagList}" ClipToBounds="True" VerticalAlignment="Center" ToolTip="{Binding TagsText}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Style="{StaticResource TagPill}">
+                                                        <TextBlock Text="{Binding}" FontSize="12" Foreground="{DynamicResource TextDim}"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="评分" Binding="{Binding RatingText}" SortMemberPath="Rating" Width="84" MinWidth="84">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+                                        <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn x:Name="UsageColumn" Header="工程" Binding="{Binding UsageCountText}" SortMemberPath="UsageCount" Width="56" MinWidth="56" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="LastUsedColumn" Header="最近使用" Binding="{Binding LastUsedText}" SortMemberPath="LastUsed" Width="96" MinWidth="96" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="LatencyColumn" Header="延迟" Binding="{Binding LatencyText}" Width="66" MinWidth="66" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="CpuColumn" Header="CPU" Binding="{Binding CpuText}" Width="50" MinWidth="50" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="LinearPhaseColumn" Header="线性相位" Binding="{Binding LinearPhaseText}" Width="70" MinWidth="70" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="SidechainColumn" Header="侧链" Binding="{Binding SidechainText}" Width="50" MinWidth="50" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="NoteColumn" Header="备注" Binding="{Binding NoteLine}" Width="1.4*" MinWidth="100" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="ReasonColumn" Header="移入原因" Binding="{Binding BlacklistReason}" Width="1.5*" Visibility="Collapsed" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTemplateColumn x:Name="RecommendColumn" Header="推荐理由" SortMemberPath="RecommendReason" Width="3*" Visibility="Collapsed">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding RecommendReason}" ToolTip="{Binding RecommendReason}" Style="{StaticResource CellDim}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel x:Name="PluginEmpty" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8F1;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="PluginEmptyText" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                    </StackPanel>
+
+                    <Border x:Name="DetailCard" Grid.Column="2" Style="{StaticResource Card}" Margin="16,6,0,0">
+                        <Grid>
+                            <StackPanel x:Name="EmptyHint" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8F1;" FontSize="30" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="选择一个插件，在这里记录使用感受" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                            </StackPanel>
+                            <ScrollViewer x:Name="DetailPanel" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                <StackPanel Margin="20,18,18,20">
+                                    <DockPanel>
+                                        <Border x:Name="AdoptionBadge" DockPanel.Dock="Right" Visibility="Collapsed" VerticalAlignment="Top" Margin="10,4,0,0" Padding="8,2"
+                                                CornerRadius="9" Background="{DynamicResource AccentSoft}" MaxWidth="200">
+                                            <TextBlock x:Name="AdoptionText" FontSize="12" Foreground="{DynamicResource Accent}" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+                                        <TextBlock x:Name="DetailTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    </DockPanel>
+                                    <TextBlock x:Name="DetailMeta" Style="{StaticResource SmallNote}" Margin="0,3,0,0"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="-4,12,0,0">
+                                        <Button x:Name="Star1" Content="&#xE735;" Tag="1" Style="{StaticResource StarButton}" Click="Star_Click" AutomationProperties.Name="1 星" ToolTip="再点一次当前星级可清除"/>
+                                        <Button x:Name="Star2" Content="&#xE735;" Tag="2" Style="{StaticResource StarButton}" Click="Star_Click" AutomationProperties.Name="2 星" ToolTip="再点一次当前星级可清除"/>
+                                        <Button x:Name="Star3" Content="&#xE735;" Tag="3" Style="{StaticResource StarButton}" Click="Star_Click" AutomationProperties.Name="3 星" ToolTip="再点一次当前星级可清除"/>
+                                        <Button x:Name="Star4" Content="&#xE735;" Tag="4" Style="{StaticResource StarButton}" Click="Star_Click" AutomationProperties.Name="4 星" ToolTip="再点一次当前星级可清除"/>
+                                        <Button x:Name="Star5" Content="&#xE735;" Tag="5" Style="{StaticResource StarButton}" Click="Star_Click" AutomationProperties.Name="5 星" ToolTip="再点一次当前星级可清除"/>
+                                    </StackPanel>
+
+                                    <DockPanel Margin="0,12,0,0">
+                                        <Button x:Name="AddToListButton" DockPanel.Dock="Right" Content="加入清单" Style="{StaticResource GhostButton}" Click="AddCurrentToList_Click"/>
+                                        <Button x:Name="CompareCurrentButton" DockPanel.Dock="Right" Content="看同类" Style="{StaticResource GhostButton}" Click="CompareCurrent_Click" ToolTip="在左边选中这款插件所属的分类，和同类插件放在一起比较"/>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock x:Name="DetailUsage" Style="{StaticResource SmallNote}" TextWrapping="Wrap" AutomationProperties.AutomationId="DetailUsage"/>
+                                            <TextBlock x:Name="DetailLists" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <Border x:Name="SharedReviewCard" Visibility="Collapsed" Margin="0,14,0,0" Padding="14,10,14,12" CornerRadius="10"
+                                            BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource SurfaceHover}">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <TextBlock x:Name="SharedAuthor" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="220" Margin="10,0,0,0" ToolTip="昵称由分享者自己填写，不能证明身份"/>
+                                                <TextBlock x:Name="SharedStars" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                                            </DockPanel>
+                                            <ComboBox x:Name="SharedAuthorPicker" Margin="0,8,0,0" SelectionChanged="SharedAuthor_Changed" AutomationProperties.Name="查看谁的评价"/>
+                                            <ScrollViewer x:Name="SharedNoteHost" MaxHeight="160" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" Focusable="False">
+                                                <TextBlock x:Name="SharedNote" TextWrapping="Wrap" LineHeight="21"/>
+                                            </ScrollViewer>
+                                            <TextBlock x:Name="SharedTags" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                            <TextBlock x:Name="SharedExtras" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,-6,-2">
+                                                <Button x:Name="CompareReviewsButton" Content="对比" Style="{StaticResource GhostButton}" Click="CompareReviews_Click" ToolTip="并排查看自己和别人的评价"/>
+                                                <Button x:Name="AdoptReviewButton" Content="采用" Style="{StaticResource GhostButton}" Click="AdoptReview_Click" ToolTip="复制到自己的评分、感受和标签，之后可以继续修改"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <TextBlock Text="使用感受" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="NoteBox" Style="{StaticResource MultilineBox}" Height="104" TextChanged="Field_Changed"
+                                             AutomationProperties.Name="使用感受" Tag="听感、适合的场景、踩过的坑…"/>
+
+                                    <TextBlock Text="我的标签" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="MyTagsBox" TextChanged="Field_Changed" AutomationProperties.Name="我的标签" Tag="场景或自定义，用逗号分隔"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="延迟" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="MixLatency" SelectionChanged="MixField_Changed" AutomationProperties.Name="延迟"><ComboBoxItem Content="未填"/><ComboBoxItem Content="无延迟"/><ComboBoxItem Content="低延迟"/><ComboBoxItem Content="高延迟"/></ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="CPU 占用" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="MixCpu" SelectionChanged="MixField_Changed" AutomationProperties.Name="CPU 占用"><ComboBoxItem Content="未填"/><ComboBoxItem Content="轻"/><ComboBoxItem Content="中"/><ComboBoxItem Content="重"/></ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="过采样" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="MixOversampling" SelectionChanged="MixField_Changed" AutomationProperties.Name="过采样"><ComboBoxItem Content="未填"/><ComboBoxItem Content="有"/><ComboBoxItem Content="没有"/></ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1">
+                                            <TextBlock Text="线性相位" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="MixLinearPhase" SelectionChanged="MixField_Changed" AutomationProperties.Name="线性相位"><ComboBoxItem Content="未填"/><ComboBoxItem Content="有"/><ComboBoxItem Content="没有"/></ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="2">
+                                            <TextBlock Text="侧链" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="MixSidechain" SelectionChanged="MixField_Changed" AutomationProperties.Name="侧链"><ComboBoxItem Content="未填"/><ComboBoxItem Content="有"/><ComboBoxItem Content="没有"/></ComboBox>
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="混音属性靠手动填写。测量要运行插件，这个软件不运行插件。推荐时只排除填了且不符的。" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+
+                                    <TextBlock Text="音色分类" Style="{StaticResource FieldLabel}"/>
+                                    <WrapPanel x:Name="TimbreChips" AutomationProperties.Name="音色分类"/>
+
+                                    <DockPanel>
+                                        <Button x:Name="TagExpandButton" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Click="TagExpand_Click" VerticalAlignment="Bottom" Margin="0,0,-6,2" Padding="8,2" Height="26" FontSize="12" AutomationProperties.AutomationId="TagExpand"/>
+                                        <TextBlock Text="功能分类" Style="{StaticResource FieldLabel}"/>
+                                    </DockPanel>
+                                    <TextBlock x:Name="TagChipsEmpty" Text="还没有分类，点“编辑分类”选择" Style="{StaticResource SmallNote}" Visibility="Collapsed"/>
+                                    <WrapPanel x:Name="TagChips"/>
+                                    <DockPanel x:Name="NewTagPanel" Margin="0,4,0,0">
+                                        <Button x:Name="AddTagButton" DockPanel.Dock="Right" Content="添加" Click="AddTag_Click" Margin="6,0,0,0"/>
+                                        <TextBox x:Name="NewTagBox" KeyDown="NewTagBox_KeyDown" AutomationProperties.Name="添加新的功能分类" Tag="添加新的分类"/>
+                                    </DockPanel>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="厂家" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="VendorBox" TextChanged="Field_Changed" AutomationProperties.Name="厂家"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="类型" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="KindBox" SelectionChanged="KindBox_SelectionChanged" AutomationProperties.Name="类型"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="购买方式" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="PurchaseKindBox" SelectionChanged="PurchaseKind_Changed" AutomationProperties.Name="购买方式"
+                                                      ToolTip="免费、已购还是其他方式得到的（例如捆绑赠送）。只能手动标，默认未标记">
+                                                <ComboBoxItem Content="未标记"/><ComboBoxItem Content="免费"/><ComboBoxItem Content="已购"/><ComboBoxItem Content="其他"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </Grid>
+                                    <Button x:Name="ResetButton" Content="恢复自动分类、音色和厂家" Style="{StaticResource GhostButton}" Click="Reset_Click" Margin="-10,8,0,0" HorizontalAlignment="Left"/>
+
+                                    <Border Height="1" Background="{DynamicResource Line}" Margin="0,14,0,0"/>
+                                    <TextBlock Text="移入原因（选填）" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="ReasonBox" Style="{StaticResource MultilineBox}" MinHeight="34" MaxHeight="80" TextChanged="Field_Changed" AutomationProperties.Name="移入原因"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <Button x:Name="BlacklistButton" Style="{StaticResource DangerButton}" Click="Blacklist_Click" HorizontalAlignment="Left"/>
+                                        <Button x:Name="DeleteRecordButton" Content="删除这条记录" Click="DeleteUninstalledRecord_Click" Margin="8,0,0,0" Visibility="Collapsed"
+                                                ToolTip="插件已经卸载。删掉后，原因、评分和感受都不再保留，也不会再提醒"/>
+                                    </StackPanel>
+                                    <TextBlock Text="移入垃圾桶只是在本软件中隐藏，文件不动，DAW 里仍可使用。" Style="{StaticResource SmallNote}" Margin="0,8,0,0"/>
+
+                                    <TextBlock Text="已安装版本" Style="{StaticResource FieldLabel}"/>
+                                    <TextBlock x:Name="DetailFiles" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,0,0,6"/>
+                                    <ItemsControl x:Name="InstalledVersionsList" Focusable="False" AutomationProperties.Name="已安装版本">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <DockPanel Margin="0,0,0,8">
+                                                    <CheckBox DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,1,6,0" IsChecked="{Binding Selected, Mode=TwoWay}" Visibility="{Binding CheckVisibility}"
+                                                              Checked="Version_Toggled" Unchecked="Version_Toggled" AutomationProperties.Name="{Binding AutomationName}"/>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontSize="12.5"/>
+                                                        <TextBlock Text="{Binding Path}" Style="{StaticResource SmallNote}" TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding Note}" Style="{StaticResource SmallNote}" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock x:Name="VersionsNote" Style="{StaticResource SmallNote}" TextWrapping="Wrap"/>
+                                    <Button x:Name="DeleteVersionsButton" Content="删除选中的版本…" Style="{StaticResource DangerButton}" Click="DeleteVersions_Click" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                                    <StackPanel x:Name="RemovedVersionsPanel" Visibility="Collapsed">
+                                        <TextBlock Text="已移到回收站" Style="{StaticResource FieldLabel}"/>
+                                        <ItemsControl x:Name="RemovedVersionsList" Focusable="False" AutomationProperties.Name="已移到回收站的版本">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <DockPanel Margin="0,0,0,6">
+                                                        <Button DockPanel.Dock="Right" Content="恢复" Style="{StaticResource GhostButton}" Click="RestoreVersion_Click" VerticalAlignment="Center"
+                                                                AutomationProperties.Name="{Binding RestoreName}"/>
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontSize="12.5"/>
+                                                            <TextBlock Text="{Binding Path}" Style="{StaticResource SmallNote}" TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 工程 -->
+            <Grid x:Name="ProjectPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <DockPanel Margin="0,0,0,12">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="ProjectCancelButton" Content="停止" Click="ProjectCancel_Click" Visibility="Collapsed" Margin="0,0,8,0"/>
+                        <Button x:Name="ProjectAddFolderButton" Content="添加文件夹" Style="{StaticResource GhostButton}" Click="AddProjectFolder_Click" Margin="0,0,6,0"
+                                ToolTip="选择存放工程的文件夹，子文件夹也会一起读取"/>
+                        <Button x:Name="ProjectScanButton" Click="ProjectScan_Click" AutomationProperties.Name="扫描工程" ToolTip="只读取新增或有变化的工程">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72C;" Margin="0,0,8,0"/>
+                                <TextBlock Text="扫描工程"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="工程" Style="{StaticResource PageTitle}"/>
+                        <TextBlock Text="支持 Cubase、Nuendo、Studio One、REAPER、Ableton Live。只读取工程文件，不修改工程，也不加载插件" Style="{StaticResource PageSubtitle}"/>
+                    </StackPanel>
+                </DockPanel>
+
+                <ItemsControl x:Name="ProjectFolderList" Grid.Row="1" Margin="0,0,0,10" AutomationProperties.Name="工程文件夹">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource TagPill}" Margin="0,0,6,4" Padding="10,2,2,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding}" FontSize="12" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                    <Button Style="{StaticResource IconButton}" Content="&#xE711;" Tag="{Binding}" Click="RemoveProjectFolder_Click" Margin="4,0,0,0" Width="22" Height="22" Padding="0" FontSize="10"
+                                            AutomationProperties.Name="{Binding StringFormat=移除文件夹 {0}}" ToolTip="不再读取这个文件夹，工程文件不受影响"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Grid Grid.Row="2" Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ProjectSearchBox" TextChanged="ProjectFilter_Changed" Tag="搜索工程名、路径或插件名" AutomationProperties.Name="搜索工程"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
+                        <RadioButton x:Name="ProjectSegmentAll" GroupName="ProjectSegment" Style="{StaticResource Segment}" Content="全部工程" Checked="ProjectFilter_Changed" Margin="0,0,6,0"/>
+                        <RadioButton x:Name="ProjectSegmentMissing" GroupName="ProjectSegment" Style="{StaticResource Segment}" Content="有缺失" Checked="ProjectFilter_Changed" Margin="0,0,6,0" AutomationProperties.Name="有缺失"/>
+                        <RadioButton x:Name="ProjectSegmentSummary" GroupName="ProjectSegment" Style="{StaticResource Segment}" Content="缺失汇总" Checked="ProjectFilter_Changed" AutomationProperties.Name="缺失汇总"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button x:Name="ProjectTreeToggle" Style="{StaticResource GhostButton}" Click="ToggleProjectTree_Click" Margin="6,0,0,0" Visibility="Collapsed" AutomationProperties.AutomationId="ProjectTreeToggle"/>
+                        <Button x:Name="ClearIgnoredButton" Content="恢复忽略的名称" Style="{StaticResource GhostButton}" Click="ClearIgnored_Click" Margin="6,0,0,0" Visibility="Collapsed"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="320"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border x:Name="ProjectTreeCard" Style="{StaticResource Card}" Width="204" Margin="0,6,14,0" Visibility="Collapsed">
+                        <TreeView x:Name="ProjectFolderTreeView" Margin="6" Style="{StaticResource FolderTree}" ItemContainerStyle="{StaticResource FolderTreeItem}"
+                                  SelectedItemChanged="ProjectFolder_Selected" ContextMenuOpening="ProjectFolderTree_ContextMenuOpening" AutomationProperties.Name="工程文件夹分层">
+                            <TreeView.ItemTemplate>
+                                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                    <DockPanel ToolTip="{Binding ToolTip}">
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding MissingText}" Visibility="{Binding MissingVisibility}" Foreground="{DynamicResource Danger}" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </HierarchicalDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                    </Border>
+
+                    <DataGrid x:Name="ProjectGrid" Grid.Column="1" RowHeight="52" SelectionMode="Single" SelectionChanged="ProjectSelection_Changed" SizeChanged="ProjectGrid_SizeChanged"
+                              ContextMenuOpening="ProjectGrid_ContextMenuOpening">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn x:Name="ProjectNameColumn" Header="工程" SortMemberPath="Name" Width="2.4*" MinWidth="120" ClipboardContentBinding="{Binding Name}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Folder}" ToolTip="{Binding Folder}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn x:Name="ProjectHostColumn" Header="宿主" Binding="{Binding HostText}" Width="76" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="最近修改" Binding="{Binding ModifiedText}" SortMemberPath="Modified" Width="96" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="ProjectVersionsColumn" Header="版本" Binding="{Binding Versions}" Width="44" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn x:Name="ProjectEffectsColumn" Header="效果器" Binding="{Binding EffectCount}" Width="56" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTemplateColumn Header="缺失" SortMemberPath="MissingCount" Width="68">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding MissingText}" Foreground="{Binding MissingBrush}" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <DataGrid x:Name="MissingGrid" Grid.Column="1" RowHeight="44" SelectionMode="Single" SelectionChanged="ProjectSelection_Changed" Visibility="Collapsed">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="缺失的插件" SortMemberPath="Name" Width="2*" ClipboardContentBinding="{Binding Name}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding NameText}" ToolTip="{Binding RememberedText}" Style="{StaticResource CellText}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="工程数" Binding="{Binding ProjectCount}" Width="72" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="最近用在" Binding="{Binding LatestText}" Width="1.4*" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="日期" Binding="{Binding LatestDateText}" SortMemberPath="Latest" Width="96" ElementStyle="{StaticResource CellDim}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel x:Name="ProjectEmpty" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="ProjectEmptyText" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                    </StackPanel>
+
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Margin="16,6,0,0">
+                        <Grid>
+                            <StackPanel x:Name="ProjectDetailEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="30" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="选择一行，查看用到的插件" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                            </StackPanel>
+
+                            <ScrollViewer x:Name="ProjectDetailPanel" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                <StackPanel Margin="20,18,18,20">
+                                    <TextBlock x:Name="ProjectDetailTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="ProjectDetailMeta" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="ProjectDetailPath" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                    <Button Content="在文件夹中显示" Style="{StaticResource GhostButton}" Click="OpenProjectFolder_Click" HorizontalAlignment="Left" Margin="-10,6,0,0"/>
+                                    <TextBlock x:Name="ProjectDetailError" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
+
+                                    <TextBlock Text="用到的效果器" Style="{StaticResource FieldLabel}"/>
+                                    <ItemsControl x:Name="ProjectDetailLines" AutomationProperties.Name="工程用到的效果器">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <DockPanel Margin="0,3">
+                                                    <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="不算缺失" Tag="{Binding Name}" Click="IgnoreLine_Click"
+                                                            Visibility="{Binding MissingVisibility}" Padding="8,2" Height="26" FontSize="12" ToolTip="这是宿主自带或不需要的插件，以后不再提示"/>
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding InstancesText}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
+                                                    <Border DockPanel.Dock="Left" Background="{DynamicResource DangerSoft}" CornerRadius="5" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="{Binding MissingVisibility}">
+                                                        <TextBlock Text="缺失" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                                    </Border>
+                                                    <Border DockPanel.Dock="Right" BorderBrush="{DynamicResource Danger}" BorderThickness="1" CornerRadius="5" Padding="6,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                            Visibility="{Binding RememberedVisibility}" ToolTip="{Binding RememberedText}">
+                                                        <TextBlock Text="曾差评" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock x:Name="ProjectDetailNotes" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <ScrollViewer x:Name="MissingDetailPanel" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                <StackPanel Margin="20,18,18,20">
+                                    <TextBlock x:Name="MissingDetailTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="MissingDetailMeta" Style="{StaticResource SmallNote}" Margin="0,3,0,0"/>
+                                    <Button Content="不算缺失" Click="IgnoreMissing_Click" HorizontalAlignment="Left" Margin="0,10,0,0" ToolTip="这是宿主自带或不需要的插件，以后不再提示"/>
+                                    <TextBlock Text="用到它的工程" Style="{StaticResource FieldLabel}"/>
+                                    <ItemsControl x:Name="MissingDetailProjects" AutomationProperties.Name="用到这款插件的工程">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" Foreground="{DynamicResource TextDim}" Margin="0,3" TextTrimming="CharacterEllipsis"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 常用清单 -->
+            <Grid x:Name="ListPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,16">
+                    <TextBlock Text="常用清单" Style="{StaticResource PageTitle}"/>
+                    <TextBlock Text="带标签的混音笔记会自动整理成清单；也可以自己建清单，比如母带常用" Style="{StaticResource PageSubtitle}"/>
+                </StackPanel>
+
+                <Grid x:Name="ListArea" Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="232"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="340"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Style="{StaticResource Card}">
+                        <DockPanel Margin="10">
+                            <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                <Button x:Name="AddListButton" DockPanel.Dock="Right" Content="新建" Click="AddList_Click" Margin="6,0,0,0"/>
+                                <TextBox x:Name="NewListBox" KeyDown="NewListBox_KeyDown" Tag="新清单名称" AutomationProperties.Name="新清单名称"/>
+                            </DockPanel>
+                            <ListBox x:Name="ListsBox" ItemContainerStyle="{StaticResource CategoryItem}" SelectionChanged="ListsBox_SelectionChanged" AutomationProperties.Name="清单列表"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.ScrollUnit="Pixel">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <Grid Grid.Column="1" Margin="16,0,16,0">
+                        <StackPanel x:Name="ListEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE728;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                            <TextBlock Text="给混音笔记加上标签（比如人声），这里会自动整理出清单；也可以在左下角自己新建" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"
+                                       TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320"/>
+                        </StackPanel>
+                        <DockPanel x:Name="ListDetail" Visibility="Collapsed">
+                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <StackPanel x:Name="ManualListButtons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button Content="添加插件" Style="{StaticResource GhostButton}" Click="ShowListCandidates_Click" ToolTip="在右边搜索并添加插件"/>
+                                    <Button Content="重命名" Style="{StaticResource GhostButton}" Click="RenameList_Click" Margin="4,0,0,0"/>
+                                    <Button Content="删除清单" Style="{StaticResource GhostButton}" Click="DeleteList_Click" Margin="4,0,0,0"/>
+                                </StackPanel>
+                                <CheckBox x:Name="ShowHiddenBox" DockPanel.Dock="Right" VerticalAlignment="Top" Margin="0,4,0,0" Checked="ShowHidden_Changed" Unchecked="ShowHidden_Changed"
+                                          AutomationProperties.AutomationId="ShowHiddenAuto"/>
+                                <StackPanel>
+                                    <TextBlock x:Name="ListTitle" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="ListMeta" Style="{StaticResource SmallNote}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <Grid>
+                                <ListBox x:Name="ListItems" ItemContainerStyle="{StaticResource CardItem}" SelectionChanged="ListItems_SelectionChanged" AutomationProperties.Name="清单里的插件" VirtualizingPanel.ScrollUnit="Pixel"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Button Style="{StaticResource IconButton}" Content="&#xE74A;" Tag="{Binding Key}" CommandParameter="up" Click="MoveInList_Click" AutomationProperties.Name="上移" ToolTip="上移" Visibility="{Binding ManualVisibility}"/>
+                                                    <Button Style="{StaticResource IconButton}" Content="&#xE74B;" Tag="{Binding Key}" CommandParameter="down" Click="MoveInList_Click" AutomationProperties.Name="下移" ToolTip="下移" Visibility="{Binding ManualVisibility}"/>
+                                                    <Button Style="{StaticResource IconButton}" Content="&#xE711;" Tag="{Binding Key}" Click="RemoveFromList_Click" AutomationProperties.Name="从清单移除" ToolTip="从清单移除" Visibility="{Binding ManualVisibility}"/>
+                                                    <Button Style="{StaticResource IconButton}" Content="&#xE7B3;" Tag="{Binding Key}" Click="HideInAutoList_Click" AutomationProperties.Name="{Binding Name, StringFormat=隐藏 {0}}" ToolTip="不在这个清单里显示" Visibility="{Binding HideVisibility}"/>
+                                                    <Button Style="{StaticResource IconButton}" Content="&#xED1A;" Tag="{Binding Key}" Click="RestoreInAutoList_Click" AutomationProperties.Name="{Binding Name, StringFormat=恢复 {0}}" ToolTip="已隐藏，点一下重新显示在这个清单里" Visibility="{Binding RestoreVisibility}"/>
+                                                    <Button Style="{StaticResource IconButton}" Content="&#xE74D;" Tag="{Binding Key}" Click="DeleteFromAutoList_Click" AutomationProperties.Name="{Binding Name, StringFormat=从笔记里删除 {0}}" ToolTip="从带这个标签的笔记里删除这款插件" Visibility="{Binding AutoVisibility}"/>
+                                                </StackPanel>
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                                        <Border Background="{DynamicResource DangerSoft}" CornerRadius="5" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="{Binding StateVisibility}">
+                                                            <TextBlock Text="{Binding StateText}" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" Text="{Binding SummaryText}" ToolTip="{Binding SummaryText}"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock x:Name="ListItemsEmpty" Text="从右边添加插件" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                            </Grid>
+                        </DockPanel>
+                    </Grid>
+
+                    <Border x:Name="ListCandidatesCard" Grid.Column="2" Style="{StaticResource Card}">
+                        <DockPanel Margin="14">
+                            <TextBox x:Name="ListSearchBox" DockPanel.Dock="Top" TextChanged="ListSearch_Changed" Tag="搜索要添加的插件" AutomationProperties.Name="搜索要添加的插件"/>
+                            <TextBlock x:Name="ListCandidateLabel" DockPanel.Dock="Top" Style="{StaticResource FieldLabel}"/>
+                            <Grid>
+                                <ListBox x:Name="ListCandidates" ItemContainerStyle="{StaticResource PickItem}" AutomationProperties.Name="可添加的插件" VirtualizingPanel.ScrollUnit="Pixel">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Tag="{Binding Key}" Click="AddToList_Click" VerticalAlignment="Center"
+                                                        AutomationProperties.Name="{Binding Name, StringFormat=添加 {0}}" ToolTip="加入这个清单"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding UsageText}" Foreground="{DynamicResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock x:Name="ListCandidatesEmpty" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Visibility="Collapsed"/>
+                            </Grid>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 混音笔记（以前叫插件链） -->
+            <Grid x:Name="ChainPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <DockPanel Margin="0,0,0,16">
+                    <Button x:Name="ImportTrackButton" DockPanel.Dock="Right" Click="ImportTracks_Click" VerticalAlignment="Bottom" Margin="12,0,0,0"
+                            AutomationProperties.AutomationId="ImportTracks" ToolTip="读取 DAW 工程，选择轨道，把轨道上的插件按顺序记成笔记。工程文件只读，不会修改">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8B5;" Margin="0,0,8,0"/>
+                            <TextBlock Text="从工程导入轨道…"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ImportNotesButton" DockPanel.Dock="Right" Content="导入笔记" Style="{StaticResource GhostButton}" Click="ImportNotes_Click" VerticalAlignment="Bottom" Margin="6,0,0,0"
+                            ToolTip="导入别人分享的混音笔记，放进单独的文件夹，不会覆盖你的笔记"/>
+                    <Button x:Name="ExportNotesButton" DockPanel.Dock="Right" Content="导出笔记" Style="{StaticResource GhostButton}" Click="ExportNotes_Click" VerticalAlignment="Bottom"
+                            ToolTip="选择笔记导出成文件分享，不包含工程名和路径"/>
+                    <StackPanel>
+                        <TextBlock Text="混音笔记" Style="{StaticResource PageTitle}"/>
+                        <TextBlock Text="按混音师、乐器分文件夹，记下每条轨道用了哪些插件、什么顺序、为什么这么用。这里只是记录，不会写入 DAW" Style="{StaticResource PageSubtitle}"/>
+                    </StackPanel>
+                </DockPanel>
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="280"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Card}">
+                        <DockPanel Margin="8">
+                            <StackPanel DockPanel.Dock="Bottom" Margin="2,8,2,0">
+                                <TextBox x:Name="NewChainBox" KeyDown="NewChainBox_KeyDown" Tag="名称" AutomationProperties.Name="新笔记或文件夹的名称"/>
+                                <UniformGrid Columns="2" Margin="0,6,0,0">
+                                    <Button x:Name="AddChainButton" Content="新建笔记" Click="AddChain_Click" Margin="0,0,3,0"
+                                            ToolTip="建在左边选中的文件夹里"/>
+                                    <Button x:Name="AddFolderButton" Content="新建文件夹" Click="AddFolder_Click" Margin="3,0,0,0"
+                                            ToolTip="建在左边选中的文件夹里"/>
+                                </UniformGrid>
+                            </StackPanel>
+                            <TextBox x:Name="NoteTreeSearch" DockPanel.Dock="Top" Margin="2,2,2,6" TextChanged="NoteTreeSearch_Changed" Tag="搜索笔记、标签或插件" AutomationProperties.Name="搜索混音笔记"/>
+                            <TreeView x:Name="NoteTree" Style="{StaticResource FolderTree}" ItemContainerStyle="{StaticResource FolderTreeItem}" AllowDrop="True"
+                                      SelectedItemChanged="NoteTree_Selected" PreviewMouseLeftButtonDown="NoteTree_MouseDown" PreviewMouseMove="NoteTree_MouseMove"
+                                      DragOver="NoteTree_DragOver" Drop="NoteTree_Drop" ContextMenuOpening="NoteTree_ContextMenuOpening" KeyDown="NoteTree_KeyDown"
+                                      AutomationProperties.Name="混音笔记分层">
+                                <TreeView.ItemTemplate>
+                                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                        <DockPanel x:Name="Row" ToolTip="{Binding ToolTip}" Background="Transparent">
+                                            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="{Binding Icon}" FontSize="13" Foreground="{Binding IconBrush}" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                            <Button x:Name="RenamePencil" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE70F;" FontSize="11" Width="22" Height="22" Margin="4,0,-4,0"
+                                                    Focusable="False" Visibility="Hidden" Click="NoteRename_Click" ToolTip="重命名（F2）" AutomationProperties.Name="重命名"/>
+                                            <TextBlock x:Name="CountText" DockPanel.Dock="Right" Text="{Binding Count}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                            <Grid>
+                                                <TextBlock x:Name="NameText" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                <TextBox x:Name="RenameBox" Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}" Visibility="Collapsed" Height="26" Padding="4,0" Margin="-4,0,0,0"
+                                                         VerticalContentAlignment="Center" AutomationProperties.Name="新的名称"
+                                                         IsVisibleChanged="NoteRenameBox_VisibleChanged" KeyDown="NoteRenameBox_KeyDown" LostKeyboardFocus="NoteRenameBox_LostFocus"/>
+                                            </Grid>
+                                        </DockPanel>
+                                        <HierarchicalDataTemplate.Triggers>
+                                            <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="RenamePencil" Property="Visibility" Value="Visible"/>
+                                            </Trigger>
+                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                <Setter TargetName="RenamePencil" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                <Setter TargetName="RenamePencil" Property="Visibility" Value="Collapsed"/>
+                                                <Setter TargetName="CountText" Property="Visibility" Value="Collapsed"/>
+                                                <Setter TargetName="NameText" Property="Visibility" Value="Hidden"/>
+                                                <Setter TargetName="RenameBox" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </HierarchicalDataTemplate.Triggers>
+                                    </HierarchicalDataTemplate>
+                                </TreeView.ItemTemplate>
+                            </TreeView>
+                        </DockPanel>
+                    </Border>
+
+                    <Grid Grid.Column="1" Margin="16,0,16,0">
+                        <StackPanel x:Name="ChainEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE71B;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="ChainEmptyText" Text="在左下角新建第一条笔记，比如“人声总线”；也可以先建文件夹，比如混音师的名字" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360"/>
+                        </StackPanel>
+
+                        <!-- 选中文件夹 -->
+                        <DockPanel x:Name="FolderDetail" Visibility="Collapsed">
+                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource DangerButton}" Click="DeleteFolder_Click" Margin="8,0,0,0" Padding="12,0" AutomationProperties.Name="删除">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock Text="删除" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button DockPanel.Dock="Right" Click="MoveFolder_Click" Margin="8,0,0,0" Padding="12,0" AutomationProperties.Name="移动到…">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8DE;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock Text="移动到…" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button DockPanel.Dock="Right" Click="RenameFolder_Click" Margin="12,0,0,0" Padding="12,0" AutomationProperties.Name="重命名">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8AC;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock Text="重命名" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <StackPanel>
+                                    <TextBlock x:Name="FolderTitle" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="FolderMeta" Style="{StaticResource SmallNote}" AutomationProperties.AutomationId="FolderMeta"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                                <RadioButton x:Name="FolderListToggle" GroupName="FolderView" Style="{StaticResource Segment}" Content="笔记列表" IsChecked="True" Checked="FolderView_Changed" Margin="0,0,6,0"/>
+                                <RadioButton x:Name="FolderMapToggle" GroupName="FolderView" Style="{StaticResource Segment}" Content="路由图" Checked="FolderView_Changed"
+                                             ToolTip="轨道 → 编组 → 效果轨 → 主输出。实线是输出，虚线是发送；Ctrl + 滚轮缩放，按住空白处拖动"/>
+                            </StackPanel>
+                            <TextBlock x:Name="FolderListHint" DockPanel.Dock="Top" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,0,0,10"
+                                       Text="左下角新建的笔记和文件夹会放在这个文件夹里。也可以把左边的笔记或文件夹拖到另一个文件夹上。"/>
+                            <Grid>
+                            <local:RouteMapView x:Name="FolderMap" Visibility="Collapsed"/>
+                            <ListBox x:Name="FolderNotes" ItemContainerStyle="{StaticResource CardItem}" MouseDoubleClick="FolderNotes_DoubleClick" AutomationProperties.Name="文件夹里的笔记"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            </Grid>
+                        </DockPanel>
+
+                        <!-- 选中笔记 -->
+                        <DockPanel x:Name="ChainDetail" Visibility="Collapsed">
+                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource DangerButton}" Click="DeleteChain_Click" Margin="8,0,0,0" Padding="12,0" AutomationProperties.Name="删除">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock Text="删除" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button DockPanel.Dock="Right" Click="MoveChain_Click" Margin="8,0,0,0" Padding="12,0" AutomationProperties.Name="移动到…">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8DE;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock Text="移动到…" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button DockPanel.Dock="Right" Click="RenameChain_Click" Margin="8,0,0,0" Padding="12,0" AutomationProperties.Name="重命名">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8AC;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock Text="重命名" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="ChainWishMissingButton" DockPanel.Dock="Right" Click="WishMissing_Click" Margin="12,0,0,0" Padding="12,0" Visibility="Collapsed"
+                                        AutomationProperties.AutomationId="ChainWishMissing" ToolTip="把这条笔记里没安装的首选和备选插件都加入心愿单，已经在心愿单里的跳过">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7BF;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock x:Name="ChainWishMissingText" Text="未安装的加入心愿单" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <StackPanel>
+                                    <TextBlock x:Name="ChainTitle" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="ChainMeta" Style="{StaticResource SmallNote}" AutomationProperties.AutomationId="ChainMeta"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <WrapPanel x:Name="ChainTagChips" DockPanel.Dock="Top" AutomationProperties.Name="笔记标签"/>
+                            <DockPanel DockPanel.Dock="Top" Margin="0,2,0,8">
+                                <Button x:Name="AddChainTagButton" DockPanel.Dock="Right" Content="添加标签" Style="{StaticResource GhostButton}" Click="AddChainTag_Click" Margin="6,0,0,0"/>
+                                <TextBox x:Name="NewChainTagBox" KeyDown="NewChainTagBox_KeyDown" Tag="自定义标签，例如：说唱、氛围" AutomationProperties.Name="添加自定义标签" MaxWidth="260" HorizontalAlignment="Left" MinWidth="200"/>
+                            </DockPanel>
+                            <TextBox x:Name="ChainNote" DockPanel.Dock="Top" Style="{StaticResource MultilineBox}" Height="56" Margin="0,0,0,10" TextChanged="ChainNote_Changed"
+                                     Tag="整体思路：用在什么场景、增益怎么打、哪一步不能省…" AutomationProperties.Name="整体思路"/>
+                            <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="12,8" Margin="0,0,0,10" AutomationProperties.Name="路由">
+                                <StackPanel>
+                                    <WrapPanel>
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8B1;" FontSize="13" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Text="类型" Style="{StaticResource SmallNote}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <ComboBox x:Name="RouteRoleBox" Width="130" SelectionChanged="RouteRole_Changed" AutomationProperties.Name="通道类型" Margin="0,0,16,0"/>
+                                        <TextBlock Text="输出到" Style="{StaticResource SmallNote}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <ComboBox x:Name="RouteOutputBox" MinWidth="170" MaxWidth="300" SelectionChanged="RouteOutput_Changed" AutomationProperties.Name="输出到"
+                                                  ToolTip="这条笔记的通道输出到哪里：主输出，或同文件夹里的编组 / 总线"/>
+                                        <TextBlock x:Name="RouteIncoming" Style="{StaticResource SmallNote}" VerticalAlignment="Center" Margin="16,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="320"
+                                                   AutomationProperties.AutomationId="RouteIncoming"/>
+                                    </WrapPanel>
+                                    <WrapPanel x:Name="RouteSends" Margin="0,6,0,0" AutomationProperties.Name="发送"/>
+                                    <WrapPanel x:Name="RouteSidechains" Margin="0,2,0,0" AutomationProperties.Name="侧链"/>
+                                </StackPanel>
+                            </Border>
+                            <Grid>
+                                <ListBox x:Name="ChainItems" ItemContainerStyle="{StaticResource CardItem}" MouseDoubleClick="ChainItems_DoubleClick" AutomationProperties.Name="链上的步骤"
+                                         VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="ChainItems_SelectionChanged">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <DockPanel DockPanel.Dock="Top">
+                                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Number}" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Width="28" VerticalAlignment="Center"/>
+                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                                        <ToggleButton Style="{StaticResource TagChip}" IsChecked="{Binding IsExpanded, Mode=TwoWay}" Content="{Binding AlternatesText}" Margin="0,0,4,0" Padding="8,1"
+                                                                      AutomationProperties.Name="{Binding Name, StringFormat={}{0} 的备选}" ToolTip="展开或收起备选插件"/>
+                                                        <Button Style="{StaticResource IconButton}" Content="&#xE74A;" Tag="{Binding}" CommandParameter="up" Click="MoveChainStep_Click" AutomationProperties.Name="上移" ToolTip="上移"/>
+                                                        <Button Style="{StaticResource IconButton}" Content="&#xE74B;" Tag="{Binding}" CommandParameter="down" Click="MoveChainStep_Click" AutomationProperties.Name="下移" ToolTip="下移"/>
+                                                        <Button Style="{StaticResource IconButton}" Content="&#xE711;" Tag="{Binding}" Click="RemoveChainStep_Click" AutomationProperties.Name="删除这一步" ToolTip="删除这一步（连同备选）"/>
+                                                    </StackPanel>
+                                                    <StackPanel>
+                                                        <DockPanel>
+                                                            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="加入心愿单" Tag="{Binding Primary}" Click="WishPick_Click" Padding="8,0" Height="22" FontSize="11.5" Margin="6,0,0,0"
+                                                                    VerticalAlignment="Center" Visibility="{Binding Primary.WishButtonVisibility}" AutomationProperties.Name="{Binding Name, StringFormat=把 {0} 加入心愿单}"/>
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Primary.WishText}" FontSize="11" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding Primary.WishTextVisibility}"/>
+                                                            <Border DockPanel.Dock="Right" BorderBrush="{DynamicResource Danger}" BorderThickness="1" CornerRadius="5" Padding="6,0" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding Primary.RememberedVisibility}" ToolTip="{Binding Primary.RememberedText}">
+                                                                <TextBlock Text="曾差评" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                                            </Border>
+                                                            <Border DockPanel.Dock="Right" Background="{DynamicResource DangerSoft}" CornerRadius="5" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="{Binding Primary.StateVisibility}">
+                                                                <TextBlock Text="{Binding Primary.StateText}" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                                        </DockPanel>
+                                                        <TextBlock Text="{Binding Primary.Detail}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                                <TextBox DockPanel.Dock="Top" Margin="28,8,0,0" Text="{Binding Primary.Note, UpdateSourceTrigger=PropertyChanged}" Tag="应用思路：这一步为什么用它、怎么设置，选填"
+                                                         AutomationProperties.Name="{Binding Name, StringFormat={}{0} 的应用思路}"/>
+                                                <StackPanel Margin="28,10,0,0" Visibility="{Binding AlternatesVisibility}">
+                                                    <DockPanel Margin="0,0,0,6">
+                                                        <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Tag="{Binding}" Click="CollapseAlternates_Click" Padding="8,0" Height="22" FontSize="11.5" Margin="8,0,0,0"
+                                                                VerticalAlignment="Top" Content="收起备选 ▴" AutomationProperties.Name="{Binding Name, StringFormat=收起 {0} 的备选}"/>
+                                                        <TextBlock Text="{Binding AlternatesHint}" Style="{StaticResource SmallNote}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                    </DockPanel>
+                                                    <ItemsControl ItemsSource="{Binding Alternates}" Focusable="False">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" Padding="12,4,0,6" Margin="0,0,0,6">
+                                                                    <DockPanel>
+                                                                        <DockPanel DockPanel.Dock="Top">
+                                                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                                                                <Button Style="{StaticResource GhostButton}" Content="设为首选" Tag="{Binding}" Click="PromoteAlternate_Click" Padding="8,2" Height="26" FontSize="12"
+                                                                                        AutomationProperties.Name="{Binding Name, StringFormat=把 {0} 设为首选}"/>
+                                                                                <Button Style="{StaticResource IconButton}" Content="&#xE74A;" Tag="{Binding}" CommandParameter="up" Click="MoveAlternate_Click" AutomationProperties.Name="备选上移" ToolTip="上移"/>
+                                                                                <Button Style="{StaticResource IconButton}" Content="&#xE74B;" Tag="{Binding}" CommandParameter="down" Click="MoveAlternate_Click" AutomationProperties.Name="备选下移" ToolTip="下移"/>
+                                                                                <Button Style="{StaticResource IconButton}" Content="&#xE711;" Tag="{Binding}" Click="RemoveAlternate_Click" AutomationProperties.Name="{Binding Name, StringFormat=移除备选 {0}}" ToolTip="移除这个备选"/>
+                                                                            </StackPanel>
+                                                                            <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                                            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="加入心愿单" Tag="{Binding}" Click="WishPick_Click" Padding="8,0" Height="22" FontSize="11.5" Margin="6,0,0,0"
+                                                                                    VerticalAlignment="Center" Visibility="{Binding WishButtonVisibility}" AutomationProperties.Name="{Binding Name, StringFormat=把 {0} 加入心愿单}"/>
+                                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding WishText}" FontSize="11" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding WishTextVisibility}"/>
+                                                                            <Border DockPanel.Dock="Right" BorderBrush="{DynamicResource Danger}" BorderThickness="1" CornerRadius="5" Padding="6,0" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding RememberedVisibility}" ToolTip="{Binding RememberedText}">
+                                                                                <TextBlock Text="曾差评" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                                                            </Border>
+                                                                            <Border DockPanel.Dock="Right" Background="{DynamicResource DangerSoft}" CornerRadius="5" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="{Binding StateVisibility}">
+                                                                                <TextBlock Text="{Binding StateText}" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                                                            </Border>
+                                                                            <StackPanel>
+                                                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                                                <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                                            </StackPanel>
+                                                                        </DockPanel>
+                                                                        <TextBox Margin="0,6,0,0" Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Tag="什么时候换用它，选填"
+                                                                                 AutomationProperties.Name="{Binding Name, StringFormat={}{0} 的备选说明}"/>
+                                                                    </DockPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock x:Name="ChainItemsEmpty" Text="从右边添加插件，先加的排在前面" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                            </Grid>
+                        </DockPanel>
+                    </Grid>
+
+                    <Border Grid.Column="2" Style="{StaticResource Card}">
+                        <DockPanel Margin="14">
+                            <TextBox x:Name="ChainSearchBox" DockPanel.Dock="Top" TextChanged="ChainSearch_Changed" Tag="搜索要添加的插件" AutomationProperties.Name="搜索要添加到笔记里的插件"/>
+                            <TextBlock x:Name="ChainCandidateLabel" DockPanel.Dock="Top" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock x:Name="ChainCandidateHint" DockPanel.Dock="Top" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                            <Grid>
+                                <ListBox x:Name="ChainCandidates" ItemContainerStyle="{StaticResource PickItem}" AutomationProperties.Name="可添加的插件" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Tag="{Binding Key}" Click="AddToChain_Click" VerticalAlignment="Center"
+                                                        AutomationProperties.Name="{Binding Name, StringFormat=添加 {0}}" ToolTip="作为新的一步加到末尾"/>
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8AB;" Tag="{Binding Key}" Click="AddAlternate_Click" VerticalAlignment="Center"
+                                                        AutomationProperties.Name="{Binding Name, StringFormat=把 {0} 加为备选}" ToolTip="加为选中这一步的备选"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding UsageText}" Foreground="{DynamicResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock x:Name="ChainCandidatesEmpty" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Visibility="Collapsed"/>
+                            </Grid>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 健康检查 -->
+            <Grid x:Name="HealthPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,14">
+                    <TextBlock Text="健康检查" Style="{StaticResource PageTitle}"/>
+                    <TextBlock x:Name="HealthExplain" Style="{StaticResource PageSubtitle}" TextWrapping="Wrap" AutomationProperties.AutomationId="HealthExplain"/>
+                </StackPanel>
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="172"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Card}">
+                        <ListBox x:Name="HealthCategories" Margin="8" ItemContainerStyle="{StaticResource PickItem}" SelectionChanged="HealthCategory_Changed"
+                                 AutomationProperties.Name="检查项" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                    <Grid Grid.Column="1" Margin="16,0,16,0">
+                        <DataGrid x:Name="HealthGrid" RowHeight="52" SelectionMode="Single" SelectionChanged="HealthGrid_SelectionChanged" MouseDoubleClick="HealthGrid_DoubleClick">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="名称" SortMemberPath="Title" Width="*" MinWidth="170" ClipboardContentBinding="{Binding Title}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="情况" Binding="{Binding Detail}" Width="1.3*">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource CellDim}">
+                                            <Setter Property="TextWrapping" Value="Wrap"/>
+                                            <Setter Property="MaxHeight" Value="44"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <StackPanel x:Name="HealthEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                            <TextBlock Text="没有发现问题" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                    <Border Grid.Column="2" Style="{StaticResource Card}">
+                        <Grid>
+                            <TextBlock x:Name="HealthPanelEmpty" Text="选择一行查看文件" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <DockPanel x:Name="HealthPanel" Margin="16" Visibility="Collapsed">
+                                <TextBlock x:Name="HealthPanelTitle" DockPanel.Dock="Top" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="HealthPanelNote" DockPanel.Dock="Top" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,4,0,8" AutomationProperties.AutomationId="HealthPanelNote"/>
+                                <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                    <Button x:Name="HealthSearchButton" Content="查更新" Style="{StaticResource PrimaryButton}" Click="HealthSearch_Click" Height="36"
+                                            ToolTip="用浏览器搜索。软件自己不联网"/>
+                                    <Button x:Name="HealthLocateButton" Content="在文件夹中显示" Click="HealthLocate_Click" Margin="0,6,0,0"/>
+                                    <Button x:Name="HealthOpenButton" Content="查看这款插件" Style="{StaticResource GhostButton}" Click="HealthOpen_Click" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ListBox x:Name="HealthFiles" ItemContainerStyle="{StaticResource PickItem}" AutomationProperties.Name="插件文件" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Summary}" FontSize="12.5"/>
+                                                <TextBlock Text="{Binding Path}" Foreground="{DynamicResource Muted}" FontSize="11.5" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </DockPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 闲置报告 -->
+            <Grid x:Name="IdlePage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,14">
+                    <TextBlock Text="闲置报告" Style="{StaticResource PageTitle}"/>
+                    <TextBlock Text="已安装但长期没进工程的效果器，只统计已扫描的工程。要不要移入垃圾桶由你决定，文件不会被移动或卸载。按住 Ctrl 或 Shift 可多选，双击查看详情" Style="{StaticResource PageSubtitle}"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1" Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="IdleSearchBox" TextChanged="IdleFilter_Changed" Tag="搜索插件名、厂家或分类" AutomationProperties.Name="搜索闲置插件"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
+                        <RadioButton x:Name="IdleSegmentAll" GroupName="IdleSegment" Style="{StaticResource Segment}" Content="全部" IsChecked="True" Checked="IdleFilter_Changed" Margin="0,0,6,0"/>
+                        <RadioButton x:Name="IdleSegmentNever" GroupName="IdleSegment" Style="{StaticResource Segment}" Content="从未出现" Checked="IdleFilter_Changed" Margin="0,0,6,0"/>
+                        <RadioButton x:Name="IdleSegmentOld" GroupName="IdleSegment" Style="{StaticResource Segment}" Content="很久没用" Checked="IdleFilter_Changed"/>
+                    </StackPanel>
+                    <ComboBox x:Name="IdleMonths" Grid.Column="2" Margin="8,0,0,0" SelectionChanged="IdleOption_Changed" AutomationProperties.Name="多久没用算闲置" ToolTip="多久没用算闲置"/>
+                    <Button x:Name="IdleBlacklistButton" Grid.Column="3" Content="把选中的插件移入垃圾桶…" Style="{StaticResource DangerButton}" Click="IdleBlacklist_Click" IsEnabled="False" Margin="8,0,0,0"/>
+                </Grid>
+
+                <Grid Grid.Row="2">
+                    <DataGrid x:Name="IdleGrid" RowHeight="52" SelectionMode="Extended" SelectionChanged="IdleGrid_SelectionChanged" MouseDoubleClick="IdleGrid_DoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="插件" SortMemberPath="Name" Width="2*" ClipboardContentBinding="{Binding Name}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Vendor}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="功能分类" Binding="{Binding TagsText}" Width="2*" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="评分" Binding="{Binding RatingText}" SortMemberPath="Rating" Width="96">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+                                        <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="用过的工程" Binding="{Binding ProjectCount}" Width="90" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="最近使用" Binding="{Binding LastUsedText}" SortMemberPath="LastUsed" Width="110" ElementStyle="{StaticResource CellDim}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <StackPanel x:Name="IdleEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE823;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="IdleEmptyText" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- 心愿单 -->
+            <Grid x:Name="WishPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Margin="0,0,0,16">
+                    <TextBlock Text="心愿单" Style="{StaticResource PageTitle}"/>
+                    <TextBlock x:Name="WishSubtitle" Style="{StaticResource PageSubtitle}"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="372"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Card}" Padding="6">
+                        <DockPanel>
+                            <Button x:Name="QuickAddButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="QuickAdd_Click" Height="38" Margin="6,0,0,0" AutomationProperties.Name="加入心愿单">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" FontSize="12" Foreground="{DynamicResource OnAccent}" Margin="0,0,8,0"/>
+                                    <TextBlock Text="加入心愿单"/>
+                                </StackPanel>
+                            </Button>
+                            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xEB51;" FontSize="16" Foreground="{DynamicResource Accent}" Margin="12,0,4,0"/>
+                            <TextBox x:Name="QuickAddBox" KeyDown="QuickAddBox_KeyDown" BorderThickness="0" Background="Transparent" FontSize="14"
+                                     Tag="输入想买的插件名，回车加入" AutomationProperties.Name="想买的插件名"/>
+                        </DockPanel>
+                    </Border>
+                    <Grid Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="128"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="WishSearchBox" TextChanged="WishFilter_Changed" Tag="搜索心愿" AutomationProperties.Name="搜索心愿"/>
+                        <ComboBox x:Name="WishSortBox" Grid.Column="1" Margin="8,0,0,0" SelectionChanged="WishFilter_Changed" AutomationProperties.Name="排序"/>
+                    </Grid>
+                </Grid>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="372"/>
+                    </Grid.ColumnDefinitions>
+
+                    <ListBox x:Name="WishList" ItemContainerStyle="{StaticResource CardItem}" SelectionChanged="WishList_SelectionChanged"
+                             AutomationProperties.Name="心愿单列表" VirtualizingPanel.ScrollUnit="Pixel">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            <Border Background="{DynamicResource GoodSoft}" CornerRadius="5" Padding="7,1" Margin="10,0,0,0" VerticalAlignment="Center"
+                                                    Visibility="{Binding InstalledVisibility}" ToolTip="电脑上已经扫描到同名插件">
+                                                <TextBlock Text="已安装" FontSize="11" Foreground="{DynamicResource Good}"/>
+                                            </Border>
+                                            <Border Background="{DynamicResource AccentSoft}" CornerRadius="5" Padding="7,1" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                    Visibility="{Binding TargetVisibility}" ToolTip="现价不高于你定的目标价">
+                                                <TextBlock Text="到目标价" FontSize="11" Foreground="{DynamicResource Accent}"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding VendorText}" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding ReasonLine}" Foreground="{DynamicResource TextDim}" Margin="0,8,0,0" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding PriceText}" HorizontalAlignment="Right">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="FontSize" Value="19"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasPrice}" Value="False">
+                                                            <Setter Property="FontSize" Value="13"/>
+                                                            <Setter Property="FontWeight" Value="Normal"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding PriorityText}" FontSize="12" Foreground="{DynamicResource Accent}" HorizontalAlignment="Right" Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel x:Name="WishEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xEB51;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="WishEmptyText" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                    </StackPanel>
+
+                    <Border Grid.Column="1" Style="{StaticResource Card}" Margin="16,0,0,0">
+                        <Grid>
+                            <StackPanel x:Name="WishPanelEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xEB51;" FontSize="30" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="选择一款心愿，记下原因和价格" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                            </StackPanel>
+                            <DockPanel x:Name="WishPanel" Visibility="Collapsed">
+                                <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,12">
+                                    <DockPanel>
+                                        <Button x:Name="WishDelete" DockPanel.Dock="Right" Content="删除" Style="{StaticResource GhostButton}" Click="WishDelete_Click" Margin="8,0,0,0" Foreground="{DynamicResource Danger}"/>
+                                        <Button x:Name="WishBought" Style="{StaticResource PrimaryButton}" Click="WishBought_Click" Height="38" AutomationProperties.Name="标记为已买">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" Foreground="{DynamicResource OnAccent}" Margin="0,0,8,0"/>
+                                                <TextBlock Text="标记为已买"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DockPanel>
+                                </Border>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="20,2,18,18">
+                                    <Border x:Name="WishTrashNote" Background="{DynamicResource DangerSoft}" CornerRadius="6" Padding="10,8" Margin="0,12,0,0" Visibility="Collapsed"
+                                            AutomationProperties.AutomationId="WishTrashNote">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE7BA;" Foreground="{DynamicResource Danger}" Margin="0,2,8,0" VerticalAlignment="Top"/>
+                                            <TextBlock x:Name="WishTrashText" TextWrapping="Wrap" LineHeight="20"/>
+                                        </DockPanel>
+                                    </Border>
+                                    <TextBlock Text="插件名" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="WishName" TextChanged="WishField_Changed" FontSize="15" FontWeight="SemiBold" AutomationProperties.Name="插件名"/>
+
+                                    <TextBlock Text="厂家" Style="{StaticResource FieldLabel}"/>
+                                    <Grid>
+                                        <TextBox x:Name="WishVendor" TextChanged="WishVendor_TextChanged" PreviewKeyDown="WishVendor_PreviewKeyDown" LostKeyboardFocus="WishVendor_LostFocus"
+                                                 AutomationProperties.Name="厂家" Tag="输入首字母，从列表里选"/>
+                                        <Popup x:Name="WishVendorPopup" PlacementTarget="{Binding ElementName=WishVendor}" Placement="Bottom" VerticalOffset="4"
+                                               AllowsTransparency="True" StaysOpen="False" Focusable="False" Width="{Binding ActualWidth, ElementName=WishVendor}">
+                                            <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" CornerRadius="8" Padding="4">
+                                                <ListBox x:Name="WishVendorSuggestions" MaxHeight="260" ItemContainerStyle="{StaticResource CategoryItem}" Focusable="False"
+                                                         PreviewMouseLeftButtonUp="WishVendorSuggestion_Click" AutomationProperties.Name="厂家候选">
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Label}"/>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
+                                            </Border>
+                                        </Popup>
+                                    </Grid>
+
+                                    <TextBlock Text="同类" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox x:Name="WishCategory" SelectionChanged="WishField_Changed" AutomationProperties.Name="这款插件的类别" ToolTip="判断错了可以手动选"/>
+                                    <Border Background="{DynamicResource AccentSoft}" CornerRadius="8" Padding="12,10" Margin="0,8,0,0">
+                                        <TextBlock x:Name="WishAdvice" TextWrapping="Wrap" LineHeight="20" AutomationProperties.AutomationId="WishAdvice"/>
+                                    </Border>
+
+                                    <TextBlock Text="价格" Style="{StaticResource FieldLabel}"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="72"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox x:Name="WishCurrency" SelectionChanged="WishField_Changed" AutomationProperties.Name="币种"/>
+                                        <TextBox x:Name="WishPrice" Grid.Column="1" Margin="8,0,0,0" TextChanged="WishField_Changed" Tag="例如 1299 或 29.99" AutomationProperties.Name="价格"/>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="目标价" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="WishTarget" TextChanged="WishField_Changed" Tag="降到多少就买" AutomationProperties.Name="目标价"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="历史最低价" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="WishLowest" TextChanged="WishField_Changed" Tag="手动记录" AutomationProperties.Name="历史最低价"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock x:Name="WishPriceHint" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,6,0,0" AutomationProperties.AutomationId="WishPriceHint"/>
+                                    <Button x:Name="WishPriceSearch" Content="查价" Click="WishPriceSearch_Click" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                            ToolTip="用浏览器搜索这款插件的价格。软件不会自动抓取价格，价格需要你手动填写"/>
+
+                                    <TextBlock Text="想要程度" Style="{StaticResource FieldLabel}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="WishPriorityCanWait" GroupName="WishPriority" Style="{StaticResource Segment}" Content="我还能忍" Checked="WishField_Changed" Margin="0,0,6,0"/>
+                                        <RadioButton x:Name="WishPriorityMustHave" GroupName="WishPriority" Style="{StaticResource Segment}" Content="势在必得" Checked="WishField_Changed"/>
+                                    </StackPanel>
+
+                                    <TextBlock Text="为什么想买" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="WishReason" Style="{StaticResource MultilineBox}" Height="92" TextChanged="WishField_Changed"
+                                             Tag="想解决什么问题，听谁推荐的…" AutomationProperties.Name="为什么想买"/>
+
+                                    <TextBlock Text="购买链接" Style="{StaticResource FieldLabel}"/>
+                                    <DockPanel>
+                                        <Button x:Name="WishOpenUrl" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8A7;" Click="WishOpenUrl_Click" Margin="4,0,0,0"
+                                                AutomationProperties.Name="打开链接" ToolTip="用浏览器打开"/>
+                                        <TextBox x:Name="WishUrl" TextChanged="WishField_Changed" Tag="https://" AutomationProperties.Name="购买链接"/>
+                                    </DockPanel>
+
+                                    <TextBlock Text="备注" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="WishNote" Style="{StaticResource MultilineBox}" Height="64" TextChanged="WishField_Changed"
+                                             Tag="例如：等黑五打折" AutomationProperties.Name="备注"/>
+
+                                </StackPanel>
+                                </ScrollViewer>
+                            </DockPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 已购账号 -->
+            <Grid x:Name="AccountPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <DockPanel Margin="0,0,0,16">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <RadioButton x:Name="AccountViewProducts" Style="{StaticResource Segment}" GroupName="AccountView" Content="按插件" IsChecked="True"
+                                     Checked="AccountView_Checked" AutomationProperties.Name="按插件"/>
+                        <RadioButton x:Name="AccountViewPlatforms" Style="{StaticResource Segment}" GroupName="AccountView" Content="厂家账号" Margin="6,0,14,0"
+                                     Checked="AccountView_Checked" AutomationProperties.Name="厂家账号"
+                                     ToolTip="同一个厂家（账号平台）的插件共用一个账号，只需要填一次"/>
+                        <Button x:Name="ILokFillButton" Content="填入 iLok 账号" Style="{StaticResource GhostButton}" Click="ILokFill_Click" Margin="0,0,6,0"
+                                Visibility="Collapsed" ToolTip="把 iLok 那条账号填到用 iLok 激活的厂家上。已填别的账号的不会覆盖"/>
+                        <Button x:Name="MigrationButton" Content="换机清单" Style="{StaticResource GhostButton}" Click="MigrationChecklist_Click" Margin="0,0,6,0"
+                                ToolTip="列出换电脑前要先停用哪些授权。不含账号、密码和序列号"/>
+                        <Button x:Name="ExportLoginsButton" Content="导出账号" Style="{StaticResource GhostButton}" Click="ExportLogins_Click" Margin="0,0,6,0"
+                                ToolTip="导出成明文文件，用于换电脑或重装系统前迁移"/>
+                        <Button x:Name="BatchAddButton" Style="{StaticResource PrimaryButton}" Click="BatchAdd_Click" AutomationProperties.Name="批量添加">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" FontSize="12" Foreground="{DynamicResource OnAccent}" Margin="0,0,8,0"/>
+                                <TextBlock Text="批量添加"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="已购账号" Style="{StaticResource PageTitle}"/>
+                        <TextBlock x:Name="AccountSubtitle" Style="{StaticResource PageSubtitle}"/>
+                    </StackPanel>
+                </DockPanel>
+
+                <Grid x:Name="AccountFilterRow" Grid.Row="1" Margin="0,0,388,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="AccountSearchBox" TextChanged="AccountFilter_Changed" Tag="搜索插件名、厂家或账号" AutomationProperties.Name="搜索已购"/>
+                    <ComboBox x:Name="AccountVendorFilter" Grid.Column="1" Margin="8,0,0,0" SelectionChanged="AccountFilter_Changed" AutomationProperties.Name="厂家"/>
+                    <ComboBox x:Name="AccountStateFilter" Grid.Column="2" Margin="8,0,0,0" SelectionChanged="AccountFilter_Changed" AutomationProperties.Name="账号状态"/>
+                    <Button x:Name="SelectAllButton" Grid.Column="3" Content="全选" Style="{StaticResource GhostButton}" Click="SelectAll_Click" Margin="6,0,0,0"
+                            ToolTip="选中当前列表里的全部插件"/>
+                </Grid>
+
+                <Grid x:Name="PlatformView" Grid.Row="2" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="372"/>
+                    </Grid.ColumnDefinitions>
+
+                    <DataGrid x:Name="PlatformGrid" RowHeight="52" SelectionMode="Single" SelectionChanged="PlatformGrid_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="厂家账号" SortMemberPath="Platform" Width="2*" ClipboardContentBinding="{Binding Platform}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Platform}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding VendorsText}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="账号" Binding="{Binding AccountText}" Width="1.8*" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="密码" Binding="{Binding PasswordMask}" Width="90" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="共用插件" Binding="{Binding CountText}" SortMemberPath="Count" Width="90" ElementStyle="{StaticResource CellDim}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel x:Name="PlatformEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE77B;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="PlatformEmptyText" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" TextAlignment="Center"/>
+                    </StackPanel>
+
+                    <Border Grid.Column="1" Style="{StaticResource Card}" Margin="16,6,0,0">
+                        <Grid>
+                            <StackPanel x:Name="PlatformPanelEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24,0">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE77B;" FontSize="30" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="选择一个厂家账号" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" HorizontalAlignment="Center"/>
+                                <TextBlock Text="同一个厂家的插件默认共用这里的账号密码。个别需要分开的，在插件详情里改成“单独账号”。" Style="{StaticResource SmallNote}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            </StackPanel>
+
+                            <DockPanel x:Name="PlatformPanel" Visibility="Collapsed">
+                                <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,12">
+                                    <Button x:Name="PlatformDelete" Content="清空这个厂家账号" Style="{StaticResource GhostButton}" Click="PlatformDelete_Click"
+                                            Foreground="{DynamicResource Danger}" HorizontalAlignment="Right"/>
+                                </Border>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Margin="20,2,18,18">
+                                        <TextBlock x:Name="PlatformTitle" FontSize="19" FontWeight="SemiBold" Margin="0,14,0,0" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="PlatformSubtitle" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                        <TextBlock Text="账号" Style="{StaticResource FieldLabel}"/>
+                                        <DockPanel>
+                                            <Button x:Name="CopyPlatformAccountButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" Click="CopyPlatformAccount_Click" Margin="2,0,0,0"
+                                                    AutomationProperties.Name="复制厂家账号" ToolTip="复制账号"/>
+                                            <TextBox x:Name="PlatformAccountBox" TextChanged="PlatformField_Changed" AutomationProperties.Name="厂家账号的账号"/>
+                                        </DockPanel>
+                                        <TextBlock Text="密码" Style="{StaticResource FieldLabel}"/>
+                                        <local:SecretBox x:Name="PlatformPassword" Label="密码" Changed="PlatformSecret_Changed" Copied="Secret_Copied"/>
+                                        <TextBlock x:Name="PlatformLocked" Style="{StaticResource SmallNote}" Foreground="{DynamicResource Danger}" Margin="0,8,0,0" Visibility="Collapsed" TextWrapping="Wrap"
+                                                   Text="这个密码是在另一个 Windows 账号下加密的，这里解不开。原来的内容没有改动。"/>
+                                        <TextBlock Text="备注" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="PlatformNote" Style="{StaticResource MultilineBox}" Height="64" TextChanged="PlatformField_Changed"
+                                                 Tag="注册邮箱、iLok 账号…" AutomationProperties.Name="厂家账号备注"/>
+                                        <TextBlock Text="共用这个账号的插件" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock x:Name="PlatformProducts" TextWrapping="Wrap" Foreground="{DynamicResource TextDim}" LineHeight="20"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </DockPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid x:Name="PurchaseView" Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="372"/>
+                    </Grid.ColumnDefinitions>
+
+                    <DataGrid x:Name="PurchaseGrid" RowHeight="52" SelectionMode="Extended" SelectionChanged="PurchaseGrid_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="插件" SortMemberPath="Name" Width="2*" ClipboardContentBinding="{Binding Name}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding VendorText}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="账号" Binding="{Binding AccountText}" Width="1.8*" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="密码" Binding="{Binding PasswordMask}" Width="90" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="授权" Binding="{Binding LicenseText}" Width="86" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="实付" Binding="{Binding PaidText}" SortMemberPath="PaidSort" Width="86" ElementStyle="{StaticResource CellDim}"/>
+                            <DataGridTextColumn Header="购买日期" Binding="{Binding DateText}" Width="100" ElementStyle="{StaticResource CellDim}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel x:Name="PurchaseEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8D7;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="PurchaseEmptyText" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                    </StackPanel>
+
+                    <Border Grid.Column="1" Style="{StaticResource Card}" Margin="16,6,0,0">
+                        <Grid>
+                            <StackPanel x:Name="PurchasePanelEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24,0">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8D7;" FontSize="30" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="选择一款查看账号" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" HorizontalAlignment="Center"/>
+                                <TextBlock Text="按住 Ctrl 或 Shift 多选，或者先按厂家筛选再点“全选”，可以一次填同一个账号" Style="{StaticResource SmallNote}" TextAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+
+                            <!-- 单选：一款的详情 -->
+                            <DockPanel x:Name="PurchasePanel" Visibility="Collapsed">
+                                <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,12">
+                                    <DockPanel>
+                                        <Button x:Name="PurchaseDelete" DockPanel.Dock="Right" Content="删除" Style="{StaticResource GhostButton}" Click="PurchaseDelete_Click" Foreground="{DynamicResource Danger}"/>
+                                        <Button x:Name="PurchaseBack" Content="移回心愿单" Click="PurchaseBack_Click" HorizontalAlignment="Left"/>
+                                    </DockPanel>
+                                </Border>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="20,2,18,18">
+                                    <TextBlock Text="插件名" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="PurchaseName" TextChanged="PurchaseField_Changed" FontSize="15" FontWeight="SemiBold" AutomationProperties.Name="插件名"/>
+                                    <TextBlock Text="厂家" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="PurchaseVendor" TextChanged="PurchaseField_Changed" AutomationProperties.Name="厂家"/>
+
+                                    <TextBlock Text="登录" Style="{StaticResource FieldLabel}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="LoginFollow" Style="{StaticResource Segment}" GroupName="LoginMode" Content="用厂家账号" Checked="LoginMode_Checked" AutomationProperties.Name="用厂家账号"/>
+                                        <RadioButton x:Name="LoginOwn" Style="{StaticResource Segment}" GroupName="LoginMode" Content="单独账号" Margin="6,0,0,0" Checked="LoginMode_Checked" AutomationProperties.Name="单独账号"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="LoginHint" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+
+                                    <TextBlock Text="账号" Style="{StaticResource FieldLabel}"/>
+                                    <DockPanel>
+                                        <Button x:Name="CopyAccountButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" Click="CopyAccount_Click" Margin="2,0,0,0"
+                                                AutomationProperties.Name="复制账号" ToolTip="复制账号"/>
+                                        <TextBox x:Name="PurchaseAccount" TextChanged="PurchaseField_Changed" AutomationProperties.Name="账号"/>
+                                    </DockPanel>
+                                    <TextBlock Text="密码" Style="{StaticResource FieldLabel}"/>
+                                    <local:SecretBox x:Name="PurchasePassword" Label="密码" Changed="PurchaseSecret_Changed" Copied="Secret_Copied"/>
+                                    <TextBlock Text="序列号" Style="{StaticResource FieldLabel}"/>
+                                    <local:SecretBox x:Name="PurchaseSerial" Label="序列号" Changed="PurchaseSecret_Changed" Copied="Secret_Copied"/>
+                                    <TextBlock x:Name="PurchaseLocked" Style="{StaticResource SmallNote}" Foreground="{DynamicResource Danger}" Margin="0,8,0,0" Visibility="Collapsed"
+                                               Text="这条的密码是在另一个 Windows 账号下加密的，这里解不开。原来的内容没有改动。"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="授权方式" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="PurchaseLicense" SelectionChanged="PurchaseField_Changed" AutomationProperties.Name="授权方式"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="剩余激活次数" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="PurchaseActivations" TextChanged="PurchaseField_Changed" AutomationProperties.Name="剩余激活次数"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="激活在" Style="{StaticResource FieldLabel}"/>
+                                    <DockPanel>
+                                        <Button x:Name="PurchaseThisMachine" DockPanel.Dock="Right" Content="本机" Click="PurchaseThisMachine_Click" Margin="6,0,0,0" ToolTip="把这台电脑加进去"/>
+                                        <TextBox x:Name="PurchaseActivatedOn" TextChanged="PurchaseField_Changed" Tag="机器名或 U 盘，多个用逗号分隔" AutomationProperties.Name="激活在"/>
+                                    </DockPanel>
+                                    <TextBlock Text="发票号或订单号" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="PurchaseInvoice" TextChanged="PurchaseField_Changed" Tag="选填。不加密保存，不要填密码" AutomationProperties.Name="发票号或订单号"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="72"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="币种" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="PurchaseCurrency" SelectionChanged="PurchaseField_Changed" AutomationProperties.Name="币种"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                            <TextBlock Text="实付" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="PurchasePaid" TextChanged="PurchaseField_Changed" AutomationProperties.Name="实付"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3">
+                                            <TextBlock Text="购买日期" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="PurchaseDate" TextChanged="PurchaseField_Changed" Tag="2026-11-06" AutomationProperties.Name="购买日期"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="当初为什么买" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="PurchaseReason" Style="{StaticResource MultilineBox}" Height="64" TextChanged="PurchaseField_Changed" AutomationProperties.Name="当初为什么买"/>
+                                    <TextBlock Text="备注" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="PurchaseNote" Style="{StaticResource MultilineBox}" Height="64" TextChanged="PurchaseField_Changed"
+                                             Tag="iLok 账号、激活台数…" AutomationProperties.Name="备注"/>
+
+                                </StackPanel>
+                                </ScrollViewer>
+                            </DockPanel>
+
+                            <!-- 多选：一次填同一个账号 -->
+                            <StackPanel x:Name="BatchPanel" Margin="20,18,18,20" Visibility="Collapsed">
+                                <TextBlock x:Name="BatchTitle" FontSize="19" FontWeight="SemiBold"/>
+                                <TextBlock Text="给选中的插件填同样的内容。留空的项不会改动。账号密码会存成各自的厂家账号，同厂家的插件共用；序列号每款单独保存。" Style="{StaticResource SmallNote}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                <TextBlock Text="账号" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="BatchAccount" AutomationProperties.Name="批量账号"/>
+                                <TextBlock Text="密码" Style="{StaticResource FieldLabel}"/>
+                                <local:SecretBox x:Name="BatchPassword" Label="批量密码" ShowCopy="False"/>
+                                <TextBlock Text="序列号" Style="{StaticResource FieldLabel}"/>
+                                <local:SecretBox x:Name="BatchSerial" Label="批量序列号" ShowCopy="False"/>
+                                <TextBlock Text="授权方式" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="BatchLicense" AutomationProperties.Name="批量授权方式"/>
+                                <TextBlock Text="激活在" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="BatchActivatedOn" Tag="机器名或 U 盘" AutomationProperties.Name="批量激活在"/>
+                                <Button x:Name="BatchApplyButton" Style="{StaticResource PrimaryButton}" Content="保存到选中的插件" Click="BatchApply_Click" Margin="0,20,0,0" Height="38"/>
+                                <Button x:Name="BatchDeleteButton" Content="删除选中的插件" Style="{StaticResource GhostButton}" Click="BatchDelete_Click" Margin="0,6,0,0" Foreground="{DynamicResource Danger}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 可选扩展（例如成就包）的页面，没装时不显示 -->
+            <ContentControl x:Name="ExtensionPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed" Focusable="False"/>
+
+            <!-- 设置 -->
+            <Grid x:Name="SettingsPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <DockPanel Margin="0,0,0,16">
+                    <Button x:Name="CancelButton" DockPanel.Dock="Right" Content="停止扫描" Click="Cancel_Click" Visibility="Collapsed" VerticalAlignment="Center"/>
+                    <StackPanel>
+                        <TextBlock Text="设置" Style="{StaticResource PageTitle}"/>
+                        <TextBlock Text="外观和插件扫描。扫描不会打开插件界面，也不会改动插件文件。" Style="{StaticResource PageSubtitle}"/>
+                    </StackPanel>
+                </DockPanel>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                    <StackPanel Margin="0,0,8,16">
+                        <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="主题" FontSize="15" FontWeight="SemiBold"/>
+                                <TextBlock Text="点一下立即生效，下次打开会保持。" Style="{StaticResource SmallNote}" Margin="0,3,0,12"/>
+                                <ItemsControl x:Name="ThemeList" AutomationProperties.Name="主题" Focusable="False">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type local:ThemeOption}">
+                                            <RadioButton Style="{StaticResource ThemeCard}" GroupName="Theme" Tag="{Binding Id}" IsChecked="{Binding IsCurrent, Mode=OneTime}"
+                                                         Checked="Theme_Checked" AutomationProperties.Name="{Binding Name}">
+                                                <StackPanel>
+                                                    <Border Height="86" CornerRadius="7" Background="{Binding Bg}" BorderBrush="{Binding Line}" BorderThickness="1" ClipToBounds="True">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="36"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border Background="{Binding Side}" CornerRadius="6,0,0,6">
+                                                                <StackPanel Margin="7,10,7,0">
+                                                                    <Border Height="10" CornerRadius="3" Background="{Binding Accent}" Margin="0,0,8,8"/>
+                                                                    <Border Height="3" CornerRadius="1.5" Background="{Binding Dim}" Margin="0,0,0,6"/>
+                                                                    <Border Height="3" CornerRadius="1.5" Background="{Binding Dim}" Margin="0,0,4,6"/>
+                                                                    <Border Height="3" CornerRadius="1.5" Background="{Binding Dim}"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                            <StackPanel Grid.Column="1" Margin="10,10,10,0">
+                                                                <Border Height="5" Width="56" CornerRadius="2" Background="{Binding Ink}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+                                                                <Border Height="38" CornerRadius="4" Background="{Binding Card}" BorderBrush="{Binding Line}" BorderThickness="1">
+                                                                    <StackPanel Margin="7,8,7,0">
+                                                                        <Border Height="3" CornerRadius="1.5" Background="{Binding Dim}" Margin="0,0,24,6"/>
+                                                                        <Border Height="5" Width="30" CornerRadius="2" Background="{Binding Accent}" HorizontalAlignment="Left"/>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                    <DockPanel Margin="2,9,2,0">
+                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                                    </DockPanel>
+                                                </StackPanel>
+                                            </RadioButton>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
+                            <DockPanel>
+                                <Button x:Name="ShowOnboardingButton" DockPanel.Dock="Right" Content="重新查看" VerticalAlignment="Top" Click="ShowOnboarding_Click"
+                                        AutomationProperties.Name="重新查看新手指引"/>
+                                <StackPanel>
+                                    <TextBlock Text="新手指引" FontSize="15" FontWeight="SemiBold"/>
+                                    <TextBlock Style="{StaticResource SmallNote}" Margin="0,3,12,0" TextWrapping="Wrap"
+                                               Text="第一次打开时的欢迎页和左侧导航的逐项介绍。导览时按 Enter 或 → 下一步，← 上一步，Esc 退出。"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
+                            <StackPanel>
+                                <DockPanel>
+                                    <Button x:Name="ClearUsageButton" DockPanel.Dock="Right" Content="清空记录" Style="{StaticResource GhostButton}" Click="ClearUsage_Click" VerticalAlignment="Top"
+                                            ToolTip="删除已经记下的使用统计。已经解锁的成就保留"/>
+                                    <StackPanel>
+                                        <TextBlock Text="使用统计（仅本机）" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,3,12,10"
+                                                   Text="只记日期和次数：哪天打开过、导出过几次备份、心愿单有几项、工程缺失数的变化等。不记路径、账号、密码、序列号和你写的文字，也不会上传。成就包用它判断“好久不见”“以防万一”这类成就，没装成就包时也先记着，以后装上能算上以前的。"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <CheckBox x:Name="UsageEnabledBox" Content="记录使用统计" Checked="UsageEnabled_Changed" Unchecked="UsageEnabled_Changed" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="UsageSummary" Style="{StaticResource SmallNote}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="ExtensionSummary" Style="{StaticResource SmallNote}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
+                            <StackPanel>
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Button x:Name="ExportReviewsButton" Content="导出评价" Style="{StaticResource GhostButton}" Click="ExportReviews_Click" Margin="0,0,6,0"/>
+                                        <Button x:Name="ImportReviewsButton" Content="导入评价" Click="ImportReviews_Click"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="评价共享" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock Style="{StaticResource SmallNote}" Margin="0,3,12,0" TextWrapping="Wrap"
+                                                   Text="把评分、感受和标签导出成文件分享。别人的评价单独保存，不会覆盖你的内容，也不影响推荐。昵称由分享者自己填写，不能证明身份。"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <TextBlock x:Name="ReviewSourcesEmpty" Text="还没有导入别人的评价。" Style="{StaticResource SmallNote}" Margin="0,12,0,0"/>
+                                <ItemsControl x:Name="ReviewSourceList" Margin="0,8,0,0" AutomationProperties.Name="已导入的评价" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="0,4,0,4">
+                                                <Button DockPanel.Dock="Right" Content="移除" Style="{StaticResource GhostButton}" Click="RemoveReviewSource_Click"
+                                                        AutomationProperties.Name="{Binding Name, StringFormat=移除 {0} 的评价}"/>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button x:Name="SettingsExportNotesButton" Content="导出笔记" Style="{StaticResource GhostButton}" Click="ExportNotes_Click" Margin="0,0,6,0"/>
+                                    <Button x:Name="SettingsImportNotesButton" Content="导入笔记" Click="ImportNotes_Click"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="笔记共享" FontSize="15" FontWeight="SemiBold"/>
+                                    <TextBlock Style="{StaticResource SmallNote}" Margin="0,3,12,0" TextWrapping="Wrap"
+                                               Text="把混音笔记（插件顺序、备选和应用思路）导出成文件分享，和评价分开。导入的笔记放进单独的文件夹，不会覆盖你的笔记。文件不包含工程名和路径。"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
+                            <DockPanel>
+                                <Button x:Name="WavesToolButton" DockPanel.Dock="Right" Content="打开工具" VerticalAlignment="Top" Click="WavesTool_Click"/>
+                                <StackPanel>
+                                    <TextBlock Text="Waves 完全卸载工具" FontSize="15" FontWeight="SemiBold"/>
+                                    <TextBlock Style="{StaticResource SmallNote}" Margin="0,3,12,0" TextWrapping="Wrap"
+                                               Text="卸载全部 Waves，并清理已知位置的残留。打开后先只读检查，可以逐项选择保留授权、预设、设置和数据。"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
+                            <StackPanel>
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Button x:Name="FullScanButton" Content="完整重扫" Style="{StaticResource GhostButton}" Click="FullScan_Click" Margin="0,0,6,0"
+                                                ToolTip="重新扫描全部文件，也会重试之前读取失败的插件"/>
+                                        <Button x:Name="ScanButton" Click="Scan_Click" AutomationProperties.Name="扫描新增" ToolTip="只扫描新增或有变化的文件">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72C;" Margin="0,0,8,0"/>
+                                                <TextBlock Text="扫描新增"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="VST3" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="Vst3Summary" Style="{StaticResource SmallNote}" Margin="0,3,12,0"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <TextBlock Text="使用系统标准位置，同时记录 CLAP 和 AAX 的文件信息。" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
+                                <ItemsControl x:Name="Vst3FolderList" ItemTemplate="{StaticResource ScanFolderTemplate}" AutomationProperties.Name="VST3 文件夹" Focusable="False"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="20,18">
+                            <StackPanel>
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Button x:Name="AddVst2FolderButton" Content="添加文件夹" Style="{StaticResource GhostButton}" Click="AddVst2Folder_Click" Margin="0,0,6,0"/>
+                                        <Button x:Name="Vst2ScanButton" Click="Vst2Scan_Click" AutomationProperties.Name="扫描 VST2" ToolTip="只读取文件信息，不加载插件">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72C;" Margin="0,0,8,0"/>
+                                                <TextBlock Text="扫描 VST2"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="VST2" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="Vst2Summary" Style="{StaticResource SmallNote}" Margin="0,3,12,0"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <ItemsControl x:Name="Vst2SuggestionList" Margin="0,14,0,0" AutomationProperties.Name="建议添加的 VST2 文件夹" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource AccentSoft}" CornerRadius="8" Padding="12,8" Margin="0,0,0,6">
+                                                <DockPanel>
+                                                    <Button DockPanel.Dock="Right" Content="添加并扫描" Style="{StaticResource PrimaryButton}" Tag="{Binding Path}" Click="AddSuggestedVst2Folder_Click"
+                                                            AutomationProperties.Name="{Binding Path, StringFormat=添加并扫描 {0}}"/>
+                                                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                                        <Run Text="{Binding Label, Mode=OneWay}"/><Run Text="{Binding Path, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                    </TextBlock>
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="Vst2HostNote" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" Margin="0,14,0,6"
+                                           Text="子文件夹会一起扫描。效果器和音源的区分来自 DAW 自己的记录，新装的 VST2 要先在 DAW 里扫描一次。"/>
+                                <ItemsControl x:Name="Vst2FolderList" ItemTemplate="{StaticResource ScanFolderTemplate}" AutomationProperties.Name="VST2 文件夹" Focusable="False"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- 状态栏 -->
+            <DockPanel Grid.Row="2" Margin="28,12,24,14">
+                <ProgressBar x:Name="ScanProgressBar" DockPanel.Dock="Right" Width="220" Height="6" Visibility="Collapsed"/>
+                <TextBlock x:Name="StatusText" Foreground="{DynamicResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+            </DockPanel>
+        </Grid>
+
+        <!-- 新手导览：压暗整个窗口，只露出当前介绍的导航项，旁边一个说明气泡。 -->
+        <Canvas x:Name="TourLayer" Grid.ColumnSpan="2" Visibility="Collapsed" ClipToBounds="True" Background="Transparent" MouseDown="TourLayer_MouseDown">
+            <Path x:Name="TourShade" Fill="#99000000"/>
+            <Border x:Name="TourRing" BorderBrush="{DynamicResource Accent}" BorderThickness="2" CornerRadius="10" IsHitTestVisible="False"/>
+            <Grid x:Name="TourBubble" Width="340" KeyboardNavigation.TabNavigation="Cycle">
+                <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" CornerRadius="12" Padding="20,16,20,14">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.35" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <DockPanel>
+                            <TextBlock x:Name="TourProgress" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="TourProgress"/>
+                            <TextBlock x:Name="TourTitle" FontSize="16" FontWeight="SemiBold" AutomationProperties.AutomationId="TourTitle"/>
+                        </DockPanel>
+                        <TextBlock x:Name="TourBody" TextWrapping="Wrap" LineHeight="20" Foreground="{DynamicResource TextDim}" Margin="0,8,0,0"
+                                   AutomationProperties.AutomationId="TourBody"/>
+                        <TextBlock x:Name="TourScanNote" Style="{StaticResource SmallNote}" Margin="0,10,0,0" Visibility="Collapsed"
+                                   Text="插件正在后台扫描，进度显示在窗口底部。"/>
+                        <DockPanel Margin="0,16,0,0">
+                            <Button x:Name="TourSkipButton" DockPanel.Dock="Left" Content="跳过" Style="{StaticResource GhostButton}" Click="TourSkip_Click"
+                                    AutomationProperties.Name="跳过导览" ToolTip="Esc"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button x:Name="TourBackButton" Content="上一步" Style="{StaticResource GhostButton}" Click="TourBack_Click" Margin="0,0,6,0" ToolTip="←"/>
+                                <Button x:Name="TourNextButton" Content="下一步" Style="{StaticResource PrimaryButton}" Click="TourNext_Click" MinWidth="76" ToolTip="Enter 或 →"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+                <!-- 指向导航项的小三角 -->
+                <Path x:Name="TourArrow" Data="M 8,0 L 0,8 L 8,16" Fill="{DynamicResource Surface}" Stroke="{DynamicResource LineStrong}" StrokeThickness="1"
+                      HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-7,0,0,0"/>
+            </Grid>
+        </Canvas>
+    </Grid>
+</Window>

@@ -1,0 +1,28 @@
+What Plugin 使用了下列第三方软件。完整授权文本在同一文件夹中。
+
+JUCE Framework
+  Copyright (c) Raw Material Software Limited
+  按 JUCE 9 End User Licence Agreement 使用：https://juce.com/legal/juce-9-licence/
+  第三方依赖清单见 JUCE 源码中的 JUCE.spdx.json。
+
+VST 3 SDK (MIT)
+  Copyright (c) Steinberg Media Technologies GmbH
+  VST is a trademark of Steinberg Media Technologies GmbH.
+  What Plugin 与 Steinberg 没有关联。
+
+JUCE 内置的组件
+  zlib (Zlib)、libpng (libpng-2.0)、HarfBuzz (MIT-Modern-Variant)、SheenBidi (Apache-2.0)、
+  LunaSVG (MIT)、PlutoVG (MIT)、FLAC (BSD-3-Clause)、libogg 和 libvorbis (BSD-3-Clause)
+  This software is based in part on the work of the Independent JPEG Group.
+
+.NET Runtime 和 Windows Desktop Runtime (MIT)
+  Copyright (c) .NET Foundation and Contributors
+
+Microsoft.Data.Sqlite、System.Security.Cryptography.ProtectedData (MIT)
+  Copyright (c) .NET Foundation and Contributors
+
+SQLitePCLRaw (Apache-2.0，文本见 Apache-2.0.txt)
+  Copyright 2014-2024 SourceGear, LLC
+
+SQLite
+  Public domain. https://www.sqlite.org/copyright.html
