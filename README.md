@@ -116,7 +116,8 @@ What Plugin 是一个做混音的人给自己写的工具，现在拿出来分�
 ### 垃圾桶与卸载历史
 - 不想要的插件移进垃圾桶（只在软件里隐藏），在垃圾桶里可以直接卸载。
 - 卸载日期、方式和原因记进卸载历史，插件记录删了也还在。
-- Waves 卸载工具：清理 Waves 的残留文件，删除前先列出清单，你确认后才删。
+- Waves 卸载工具（**测试中**）：清理 Waves 的残留文件，删除前先列出清单，你确认后才删。
+  > ⚠️ 这个工具还在测试阶段，不保证能完全卸载干净。使用前请自行备份；如出现卸载不干净等问题，作者不承担责任。
 
 ### 备份、分享与成就
 - 完整备份和恢复：插件资料、心愿单、账号、设置、评价和清单。选择包含账号密码时，这部分用你设的备份密码加密（AES-256-GCM）。
@@ -142,6 +143,9 @@ What Plugin 是一个做混音的人给自己写的工具，现在拿出来分�
 
 **卸载软件会删掉我的数据吗？**
 不会。数据库留在 `%LOCALAPPDATA%\WhatPlugin\`。换电脑时用软件里的“导出备份”迁移。
+
+**Waves 卸载工具靠谱吗？**
+它还在测试中，不保证完全有效，可能有残留没清掉。建议先用 Waves Central 正常卸载，再用它清理残留，并提前备份。如出现卸载不干净等问题，作者不承担责任。
 
 **支持 Mac 吗？**
 目前只支持 Windows 10 / 11（64 位）。
@@ -202,6 +206,8 @@ DAW 内查询插件使用 JUCE 构建，第三方组件的许可见 [installer/T
 - **Project analysis** (read-only): see which plugins each project uses, what's missing, and which plugins you never use.
 - **Mix notes**: save effect chains with alternatives and reasoning, import tracks from Cubase / Nuendo, Studio One, REAPER and Ableton Live, and look them up inside your DAW with the What Plugin Lookup VST3.
 - **Accounts, wishlist and trash**: remember which account bought what (passwords encrypted with DPAPI), and get reminded why you uninstalled a plugin before you buy it again.
+
+- **Waves uninstall tool (experimental)**: cleans up leftover Waves files after you confirm the list. It is still in testing and is not guaranteed to remove everything; use it at your own risk — the author is not responsible for incomplete uninstalls.
 
 All data stays on your computer. Project files are never modified, and iLok / PACE license data is never read or changed.
 
