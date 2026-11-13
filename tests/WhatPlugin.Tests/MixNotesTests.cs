@@ -5,7 +5,7 @@ using WhatPlugin.Core;
 
 namespace WhatPlugin.Tests;
 
-/// <summary>混音笔记（文件夹、标签、备选、工程导入）、自动常用清单、适合音色和 v12 迁移。</summary>
+/// <summary>混音笔记（文件夹、标签、备选、工程导入、批量删除）、适合音色和 v12 迁移。</summary>
 public sealed class MixNotesTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "pv-n-" + Guid.NewGuid().ToString("N"));
@@ -383,82 +383,60 @@ public sealed class MixNotesTests : IDisposable
         Assert.Equal(("我还能忍", "势在必得"), (WishPriority.Text(WishPriority.CanWait), WishPriority.Text(WishPriority.MustHave)));
     }
 
-    // ---------- 自动常用清单 ----------
-
-    private static PluginChain Note(string name, string[] tags, params ChainStep[] steps) =>
-        new(++_nextId, name, "", steps, null, tags);
+    // ---------- 批量删除、连笔记一起删文件夹、导入文件的种类 ----------
 
     [Fact]
-    public void AutoListsRankPrimaryAboveAlternatesAndCountEachNoteOnce()
+    public void DeletingFolderWithNotesRemovesSubtreeAndRoutesOnly()
     {
-        var a = Row("Alpha");
-        var b = Row("Beta");
-        var c = Row("Gamma");
-        var gone = Row("Gone", missing: true);
-        var notes = new[]
-        {
-            Note("Lead", ["人声"], new ChainStep(a.Key, "Alpha"), new ChainStep(a.Key, "Alpha"), new ChainStep(b.Key, "Beta", "", [new ChainPick(c.Key, "Gamma")])),
-            Note("Double", ["人声", "合唱"], new ChainStep(c.Key, "Gamma", "", [new ChainPick(a.Key, "Alpha")]), new ChainStep(gone.Key, "Gone")),
-            Note("Back", ["人声"], new ChainStep(b.Key, "Beta"), new ChainStep("", "UADx Something")),
-            Note("Untagged", [], new ChainStep(b.Key, "Beta")),
-        };
+        using var db = new PluginDatabase(DbPath);
+        var mixer = db.AddNoteFolder(null, "混音师");
+        var drums = db.AddNoteFolder(mixer.Id, "鼓组");
+        var other = db.AddNoteFolder(null, "通用");
+        var kick = db.AddChain("Kick", drums.Id);
+        var bus = db.AddChain("Drum Bus", mixer.Id);
+        var vocal = db.AddChain("Vocal", other.Id);
+        var loose = db.AddChain("Loose");
+        db.SaveChain(kick.Id, "", [new ChainStep("k", "K")]);
+        // 外面的笔记发送到要删的笔记：路由要跟着删，否则 id 被新笔记复用时会连错。
+        db.SetRoutes(vocal.Id, null, [bus.Id]);
+        db.SetRoutes(kick.Id, bus.Id, []);
 
-        var lists = AutoLists.Build(notes, [a, b, c, gone]);
+        Assert.Equal(2, db.DeleteNoteFolderWithNotes(mixer.Id));
 
-        // 预设标签排在自定义标签前面。
-        Assert.Equal(["人声", "合唱"], lists.Select(l => l.Tag));
-        var vocal = lists[0];
-        Assert.Equal(("人声 常用", 3), (vocal.Name, vocal.NoteCount));
-        // Beta：Lead、Back 首选 → 2；Alpha：Lead 首选（同一条笔记里两次只算一次）+ Double 备选 → 1.5；
-        // Gamma：Double 首选 + Lead 备选 → 1.5，和 Alpha 同分时按名称。
-        Assert.Equal(["Beta", "Alpha", "Gamma"], vocal.Items.Select(i => i.Plugin.Name));
-        var alpha = vocal.Items[1];
-        Assert.Equal((1.5, 1, 1), (alpha.Score, alpha.PrimaryNotes, alpha.AlternateNotes));
-        Assert.Equal(["Double", "Lead"], alpha.NoteNames);
-        Assert.DoesNotContain(vocal.Items, i => i.Plugin.Name == "Gone");
+        Assert.Equal(["通用"], db.LoadNoteFolders().Select(f => f.Name));
+        Assert.Equal(["Loose", "Vocal"], db.LoadChains().Select(c => c.Name).Order());
+        Assert.Empty(db.LoadRoutes());
+        // 不存在的文件夹什么都不做。
+        Assert.Equal(0, db.DeleteNoteFolderWithNotes(mixer.Id));
+        Assert.Equal(2, db.LoadChains().Count);
     }
 
     [Fact]
-    public void AutoListsHidePluginsPerTagAndPersistAsJson()
+    public void DeleteChainsRemovesOnlyTheGivenNotes()
     {
-        var a = Row("Alpha");
-        var b = Row("Beta");
-        var notes = new[] { Note("N", ["人声", "鼓"], new ChainStep(a.Key, "Alpha"), new ChainStep(b.Key, "Beta")) };
+        using var db = new PluginDatabase(DbPath);
+        var a = db.AddChain("A");
+        var b = db.AddChain("B");
+        var c = db.AddChain("C");
+        db.SaveChain(a.Id, "", [new ChainStep("k", "K")]);
 
-        var hidden = AutoLists.SetHidden(new Dictionary<string, IReadOnlySet<string>>(), "人声", a.Key, hide: true);
-        var json = AutoLists.WriteHidden(hidden);
-        var lists = AutoLists.Build(notes, [a, b], AutoLists.ReadHidden(json));
+        Assert.Equal(2, db.DeleteChains([a.Id, c.Id, a.Id, 9999]));
 
-        var vocal = lists.Single(l => l.Tag == "人声");
-        Assert.Equal(["Beta"], vocal.Items.Select(i => i.Plugin.Name));
-        Assert.Equal(["Alpha"], vocal.Hidden.Select(i => i.Plugin.Name));
-        Assert.Equal(2, lists.Single(l => l.Tag == "鼓").Items.Count);
-
-        var restored = AutoLists.SetHidden(AutoLists.ReadHidden(json), "人声", a.Key, hide: false);
-        Assert.Empty(restored);
-        Assert.Empty(AutoLists.ReadHidden("not json"));
+        Assert.Equal(["B"], db.LoadChains().Select(n => n.Name));
+        Assert.Equal(b.Id, db.LoadChains().Single().Id);
+        Assert.Equal(0, db.DeleteChains([]));
     }
 
     [Fact]
-    public void RemovingPluginFromNotePromotesFirstAlternate()
+    public void ImportKindFollowsTheFileExtension()
     {
-        var a = Row("Alpha");
-        var b = Row("Beta");
-        var c = Row("Gamma");
-        var note = Note("N", ["人声"],
-            new ChainStep(a.Key, "Alpha", "首选思路", [new ChainPick(b.Key, "Beta", "b"), new ChainPick(c.Key, "Gamma")]),
-            new ChainStep(c.Key, "Gamma", "", [new ChainPick(a.Key, "Alpha")]),
-            new ChainStep(a.Key, "Alpha"));
-
-        var steps = AutoLists.WithoutPlugin(note, a.Key, [a, b, c])!;
-
-        // 第一步由 Beta 顶上（带着它自己的说明），第二步的备选去掉，只剩 Alpha 的第三步整步删除。
-        Assert.Equal(2, steps.Count);
-        Assert.Equal(("Beta", "b"), (steps[0].PluginName, steps[0].Note));
-        Assert.Equal(["Gamma"], steps[0].Backups.Select(p => p.PluginName));
-        Assert.Equal("Gamma", steps[1].PluginName);
-        Assert.Empty(steps[1].Backups);
-        Assert.Null(AutoLists.WithoutPlugin(note, "no-such-key", [a, b, c]));
+        Assert.Equal(ImportKind.Backup, ImportKinds.Of(@"c:\x\WhatPlugin-备份-20261114.json"));
+        Assert.Equal(ImportKind.Reviews, ImportKinds.Of("阿吹-插件评价" + ReviewShare.Extension));
+        Assert.Equal(ImportKind.Reviews, ImportKinds.Of("A" + ReviewShare.Extension.ToUpperInvariant()));
+        Assert.Equal(ImportKind.Notes, ImportKinds.Of(@"d:\share\混音笔记" + NoteShare.Extension));
+        // 认不出的当备份读，由备份的读取报格式错误。
+        Assert.Equal(ImportKind.Backup, ImportKinds.Of("notes.txt"));
+        Assert.Equal(ImportKind.Backup, ImportKinds.Of("没有扩展名"));
     }
 
     // ---------- 适合音色、分类栏和厂家候选 ----------

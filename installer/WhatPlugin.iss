@@ -2,7 +2,7 @@
 ; /DTestInstall 生成试装版：不要管理员权限，所有文件都装到 TestRoot，不碰系统目录。
 
 #define AppName "WhatPlugin"
-#define AppVersion "1.2.7"
+#define AppVersion "1.3.0"
 #define Vst3Name "WhatPluginLookup.vst3"
 #define LegacyVst3Name "PluginVault Lookup.vst3"
 ; 1.2.6 及以前名字里带空格：插件、安装目录、快捷方式都叫 "What Plugin…"，升级时清理掉。

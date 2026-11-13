@@ -158,7 +158,7 @@ public sealed class UninstallHistoryTests : IDisposable
             ]);
             json = UserDataBackup.Serialize(BackupRestore.Collect(source, includeSecrets: false, out _), null);
         }
-        Assert.Contains("\"Version\": 6", json);
+        Assert.Contains("\"Version\": 7", json);
 
         using var db = new PluginDatabase(Db("b"));
         var content = UserDataBackup.Read(json).Content;

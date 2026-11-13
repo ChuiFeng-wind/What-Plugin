@@ -6,70 +6,10 @@ using System.Windows.Media;
 
 namespace WhatPlugin.App;
 
-/// <summary>导出备份时选是否带账号密码、设备份密码；导入时输入备份密码。</summary>
+/// <summary>导入时输入备份密码，以及导出、导入勾选窗口共用的小零件。</summary>
 public static class BackupDialogs
 {
     public const int MinPasswordLength = 6;
-
-    /// <summary>返回 null 表示取消。不含账号密码时 Password 为空。</summary>
-    public static (bool IncludeSecrets, string Password)? ExportOptions(Window owner, int secretCount)
-    {
-        var window = NewWindow(owner, "导出备份");
-        var include = new CheckBox
-        {
-            IsChecked = true,
-            Margin = new Thickness(0, 14, 0, 0),
-            Content = new TextBlock { Text = $"包含账号、密码和序列号（{secretCount} 条，含厂家账号）", TextWrapping = TextWrapping.Wrap },
-        };
-        AutomationProperties.SetAutomationId(include, "BackupIncludeSecrets");
-        AutomationProperties.SetName(include, "包含账号、密码和序列号");
-
-        var password = NewPasswordBox("BackupPassword", "备份密码");
-        var confirm = NewPasswordBox("BackupPasswordConfirm", "再输一次备份密码");
-        var passwordPanel = new StackPanel { Margin = new Thickness(24, 6, 0, 0) };
-        passwordPanel.Children.Add(Label("备份密码"));
-        passwordPanel.Children.Add(password);
-        passwordPanel.Children.Add(Label("再输一次"));
-        passwordPanel.Children.Add(confirm);
-        passwordPanel.Children.Add(Note("账号密码会用这个密码加密后放进备份，导入时要输入它。它不会保存在任何地方，忘了就解不开账号密码（其他内容不受影响）。"));
-
-        var error = ErrorText();
-        var ok = OkButton("导出");
-        ok.Click += (_, _) =>
-        {
-            if (include.IsChecked == true)
-            {
-                if (password.Password.Length < MinPasswordLength)
-                {
-                    Show(error, $"备份密码至少 {MinPasswordLength} 位");
-                    password.Focus();
-                    return;
-                }
-                if (password.Password != confirm.Password)
-                {
-                    Show(error, "两次输入的备份密码不一样");
-                    confirm.Focus();
-                    return;
-                }
-            }
-            window.DialogResult = true;
-        };
-        include.Checked += (_, _) => { passwordPanel.Visibility = Visibility.Visible; error.Visibility = Visibility.Collapsed; };
-        include.Unchecked += (_, _) => { passwordPanel.Visibility = Visibility.Collapsed; error.Visibility = Visibility.Collapsed; };
-
-        var content = Body("导出备份",
-            "备份包括插件评分和备注、心愿和已购、常用清单、插件链、设置、导入的评价。");
-        content.Children.Add(include);
-        content.Children.Add(passwordPanel);
-        content.Children.Add(error);
-        content.Children.Add(Buttons(CancelButton(window), ok));
-        Finish(window, content);
-        window.Loaded += (_, _) => password.Focus();
-
-        if (window.ShowDialog() != true)
-            return null;
-        return include.IsChecked == true ? (true, password.Password) : (false, "");
-    }
 
     /// <summary>
     /// 让用户输入备份密码。<paramref name="tryPassword"/> 返回 null 表示解开了，否则返回错误提示并留在对话框里。
@@ -132,7 +72,7 @@ public static class BackupDialogs
 
     // ---------- 共用的小零件，和 Dialogs 里的样式一致 ----------
 
-    private static Window NewWindow(Window owner, string title)
+    internal static Window NewWindow(Window owner, string title)
     {
         var window = new Window
         {
@@ -146,7 +86,7 @@ public static class BackupDialogs
         return window;
     }
 
-    private static PasswordBox NewPasswordBox(string id, string name)
+    internal static PasswordBox NewPasswordBox(string id, string name)
     {
         var box = new PasswordBox { Margin = new Thickness(0, 4, 0, 0) };
         AutomationProperties.SetAutomationId(box, id);
@@ -154,14 +94,14 @@ public static class BackupDialogs
         return box;
     }
 
-    private static TextBlock Label(string text) => new()
+    internal static TextBlock Label(string text) => new()
     {
         Text = text,
         Margin = new Thickness(0, 12, 0, 0),
         Foreground = (Brush)Application.Current.FindResource("TextDim"),
     };
 
-    private static TextBlock Note(string text) => new()
+    internal static TextBlock Note(string text) => new()
     {
         Text = text,
         TextWrapping = TextWrapping.Wrap,
@@ -171,7 +111,7 @@ public static class BackupDialogs
         Foreground = (Brush)Application.Current.FindResource("TextDim"),
     };
 
-    private static TextBlock ErrorText()
+    internal static TextBlock ErrorText()
     {
         var text = new TextBlock
         {
@@ -184,14 +124,14 @@ public static class BackupDialogs
         return text;
     }
 
-    private static void Show(TextBlock error, string message)
+    internal static void Show(TextBlock error, string message)
     {
         error.Text = message;
         error.Visibility = Visibility.Visible;
         AutomationProperties.SetName(error, message);
     }
 
-    private static Button OkButton(string text)
+    internal static Button OkButton(string text)
     {
         var ok = new Button { Content = text, MinWidth = 88, IsDefault = true, Margin = new Thickness(8, 0, 0, 0) };
         ok.Style = (Style)Application.Current.FindResource("PrimaryButton");
@@ -199,7 +139,7 @@ public static class BackupDialogs
         return ok;
     }
 
-    private static Button CancelButton(Window window)
+    internal static Button CancelButton(Window window)
     {
         var cancel = new Button { Content = "取消", MinWidth = 76, IsCancel = true };
         AutomationProperties.SetAutomationId(cancel, "DialogCancel");
@@ -207,7 +147,7 @@ public static class BackupDialogs
         return cancel;
     }
 
-    private static StackPanel Buttons(Button cancel, Button ok)
+    internal static StackPanel Buttons(Button cancel, Button ok)
     {
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 22, 0, 0) };
         buttons.Children.Add(cancel);
@@ -215,7 +155,7 @@ public static class BackupDialogs
         return buttons;
     }
 
-    private static StackPanel Body(string title, string message)
+    internal static StackPanel Body(string title, string message)
     {
         var content = new StackPanel { Margin = new Thickness(24, 22, 24, 20) };
         content.Children.Add(new TextBlock { Text = title, FontSize = 17, FontWeight = FontWeights.SemiBold });
@@ -232,7 +172,7 @@ public static class BackupDialogs
         return content;
     }
 
-    private static void Finish(Window window, StackPanel content) =>
+    internal static void Finish(Window window, StackPanel content) =>
         window.Content = new Border
         {
             BorderBrush = (Brush)Application.Current.FindResource("LineStrong"),

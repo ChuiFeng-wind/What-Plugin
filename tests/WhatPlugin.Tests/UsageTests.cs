@@ -44,6 +44,32 @@ public sealed class UsageTests : IDisposable
     }
 
     [Fact]
+    public void PaidPluginsAreBackfilledIntoPurchasesOnce()
+    {
+        using var db = new PluginDatabase(DbPath);
+        db.SaveMerged([Merged("k1", "Alpha"), Merged("k2", "Beta"), Merged("k3", "Gamma"), Merged("k4", "Delta")]);
+        foreach (var row in db.LoadPlugins().Where(p => p.Name != "Delta"))
+            db.SaveUserData(row.Id, row.User with { Purchase = PurchaseKind.Paid });
+        // Beta 已经在已购里，Gamma 还在心愿单。
+        db.UpsertPurchased([new PurchaseDraft("Beta", "Acme", "me@example.com")]);
+        db.AddWish(new WishItem(0, "Gamma", "Acme", Reason: "想要"));
+
+        Assert.Equal(2, db.BackfillPurchases());
+
+        var wishes = db.LoadWishes();
+        Assert.Equal(["Alpha", "Beta", "Gamma"], wishes.Where(w => w.Status == WishStatus.Purchased).Select(w => w.Name).Order());
+        Assert.Equal("想要", wishes.Single(w => w.Name == "Gamma").Reason);
+        Assert.DoesNotContain(wishes, w => w.Name == "Delta");
+        // 原来填的账号不动。
+        Assert.Equal("me@example.com", PurchaseLogin.Resolve(wishes.Single(w => w.Name == "Beta"), PurchaseLogin.ByKey(db.LoadPlatformAccounts())).Account);
+
+        // 只做一次：删掉以后不会再加回来。
+        db.DeleteWishes([wishes.Single(w => w.Name == "Alpha").Id]);
+        Assert.Equal(0, db.BackfillPurchases());
+        Assert.DoesNotContain(db.LoadWishes(), w => w.Name == "Alpha");
+    }
+
+    [Fact]
     public void OldBackupWithoutPurchaseKeepsLocalMark()
     {
         using var db = new PluginDatabase(DbPath);
@@ -193,7 +219,7 @@ public sealed class UsageTests : IDisposable
         source.UnlockAchievements(["ACH-028"], Now.AddDays(-2));
 
         var json = UserDataBackup.Serialize(BackupRestore.Collect(source, includeSecrets: false, out _), null);
-        Assert.Contains("\"Version\": 6", json);
+        Assert.Contains("\"Version\": 7", json);
 
         using var target = new PluginDatabase(Path.Combine(_dir, "target.db"));
         target.UnlockAchievements(["ACH-028"], Now);

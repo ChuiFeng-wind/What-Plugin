@@ -29,7 +29,7 @@ public sealed class OnboardingTests
     [Fact]
     public void EveryBuiltInPageHasAStop()
     {
-        string[] pages = ["Plugins", "Projects", "Lists", "Chains", "Idle", "Health", "Wishes", "Accounts", "Blacklist", "Settings"];
+        string[] pages = ["Plugins", "Projects", "Chains", "Idle", "Health", "Wishes", "Accounts", "Blacklist", "Settings"];
         var stops = Onboarding.Stops(pages);
         Assert.Equal(pages.Length, stops.Count);
         Assert.All(stops, s => Assert.False(string.IsNullOrWhiteSpace(s.Body)));

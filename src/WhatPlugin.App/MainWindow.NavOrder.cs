@@ -42,6 +42,19 @@ public partial class MainWindow
         }
         foreach (var rest in byKey.Values)
             NavList.Children.Add(rest);
+        PlaceNavDivider();
+    }
+
+    /// <summary>
+    /// 分隔线不是导航项，不参与排序和保存：始终放在“健康检查”上面，把日常用的页面和报告类页面隔开。
+    /// “健康检查”被拖到最上面时不显示。
+    /// </summary>
+    private void PlaceNavDivider()
+    {
+        NavList.Children.Remove(NavDivider);
+        var at = NavList.Children.IndexOf(NavHealth);
+        if (at > 0)
+            NavList.Children.Insert(at, NavDivider);
     }
 
     private void SaveNavOrder(List<string> order)
@@ -83,8 +96,8 @@ public partial class MainWindow
             e.Handled = true;
             return;
         }
-        var index = NavList.Children.IndexOf(item);
-        var last = NavList.Children.Count - 1;
+        var index = NavItems.IndexOf(item);
+        var last = NavItems.Count - 1;
         var up = MenuEntry("上移", "", () => MoveNav(item, -1), "Alt+↑");
         up.IsEnabled = index > 0;
         var down = MenuEntry("下移", "", () => MoveNav(item, 1), "Alt+↓");
@@ -187,7 +200,7 @@ public partial class MainWindow
         if (e.Data.GetData(typeof(RadioButton)) is not RadioButton dragged || dragged.Parent != NavList)
             return;
         var index = NavInsertIndex(e, out _);
-        var from = NavList.Children.IndexOf(dragged);
+        var from = NavItems.IndexOf(dragged);
         // 插入位置按移走之后的列表算。
         MoveNavTo(dragged, index > from ? index - 1 : index);
         e.Handled = true;

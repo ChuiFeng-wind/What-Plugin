@@ -433,7 +433,7 @@ public sealed class RoutingTests : IDisposable
             var entries = BackupRestore.ChainEntries(db.LoadChains(), db.LoadNoteFolders(), db.LoadRoutes());
             json = UserDataBackup.Serialize(new BackupContent([], [], [], entries, [], null, null), null);
         }
-        Assert.Contains("\"Version\": 6", json);
+        Assert.Contains("\"Version\": 7", json);
 
         using var restored = new PluginDatabase(Path.Combine(_dir, "b.db"));
         Assert.Equal(3, restored.ImportChains(UserDataBackup.ParseChains(json)));

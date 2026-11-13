@@ -13,6 +13,16 @@ public static class Dialogs
 {
     public static bool Confirm(Window owner, string title, string message, string okText, bool danger = false)
     {
+        var option = false;
+        return Confirm(owner, title, message, okText, null, ref option, danger);
+    }
+
+    /// <summary>带一个勾选项的危险操作确认，例如删除文件夹时“同时删除笔记”。</summary>
+    public static bool Confirm(Window owner, string title, string message, string okText, string optionText, ref bool option) =>
+        Confirm(owner, title, message, okText, optionText, ref option, danger: true);
+
+    private static bool Confirm(Window owner, string title, string message, string okText, string? optionText, ref bool option, bool danger)
+    {
         var window = new Window
         {
             Owner = owner,
@@ -48,6 +58,14 @@ public static class Dialogs
         };
         AutomationProperties.SetAutomationId(body, "DialogMessage");
         content.Children.Add(body);
+        CheckBox? extra = null;
+        if (optionText != null)
+        {
+            extra = new CheckBox { IsChecked = option, Margin = new Thickness(0, 14, 0, 0), Content = new TextBlock { Text = optionText, TextWrapping = TextWrapping.Wrap } };
+            AutomationProperties.SetName(extra, optionText);
+            AutomationProperties.SetAutomationId(extra, "DialogOption");
+            content.Children.Add(extra);
+        }
         content.Children.Add(buttons);
 
         window.Content = new Border
@@ -56,7 +74,11 @@ public static class Dialogs
             BorderThickness = new Thickness(1),
             Child = content,
         };
-        return window.ShowDialog() == true;
+        if (window.ShowDialog() != true)
+            return false;
+        if (extra != null)
+            option = extra.IsChecked == true;
+        return true;
     }
 
     /// <summary>勾选若干项后确认。返回勾选的序号；取消返回 null。</summary>
@@ -395,10 +417,20 @@ public static class WindowEffects
     private const int WindowCornerPreference = 33;
     private const int RoundCorners = 2;
 
+    /// <summary>离屏模式（见 <see cref="App.Offscreen"/>）下窗口不激活、不进任务栏。</summary>
+    private static void Quiet(Window window)
+    {
+        if (!App.Offscreen)
+            return;
+        window.ShowActivated = false;
+        window.ShowInTaskbar = false;
+    }
+
     /// <summary>对话框没有系统标题栏，顶部一条可以拖动。</summary>
     public static void ApplyDialog(Window window)
     {
         window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Quiet(window);
         WindowChrome.SetWindowChrome(window, new WindowChrome
         {
             CaptionHeight = 44,
@@ -412,6 +444,7 @@ public static class WindowEffects
 
     public static void Apply(Window window)
     {
+        Quiet(window);
         window.SourceInitialized += (_, _) => UpdateFrame(window);
     }
 
@@ -430,4 +463,28 @@ public static class WindowEffects
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+}
+
+/// <summary>
+/// 打开、保存文件的系统对话框。离屏测试（见 <see cref="App.Offscreen"/>）时系统对话框会出现在屏幕上抢焦点，
+/// 所以离屏模式下如果设了环境变量 WHATPLUGIN_OFFSCREEN_FILES（指向一个文本文件），就从里面按行依次取路径，不弹对话框；取完了当作取消。
+/// 正常启动时不受影响。
+/// </summary>
+public static class FileDialogs
+{
+    public const string QueueVariable = "WHATPLUGIN_OFFSCREEN_FILES";
+
+    public static bool Show(Microsoft.Win32.FileDialog dialog, Window owner)
+    {
+        if (App.Offscreen && Environment.GetEnvironmentVariable(QueueVariable) is { Length: > 0 } queue)
+        {
+            var lines = System.IO.File.Exists(queue) ? System.IO.File.ReadAllLines(queue).Where(l => l.Length > 0).ToList() : [];
+            if (lines.Count == 0)
+                return false;
+            dialog.FileName = lines[0];
+            System.IO.File.WriteAllLines(queue, lines.Skip(1));
+            return true;
+        }
+        return dialog.ShowDialog(owner) == true;
+    }
 }

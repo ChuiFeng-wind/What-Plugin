@@ -82,7 +82,7 @@ public sealed class FullBackupTests : IDisposable
         // 其余内容仍是可读的。
         Assert.Contains("很好用", json);
         Assert.Contains("人声链", json);
-        Assert.Contains("\"Version\": 6", json);
+        Assert.Contains("\"Version\": 7", json);
     }
 
     [Fact]

@@ -165,32 +165,22 @@ public partial class MainWindow
             ShowSharedReviews(_current.Row);
     }
 
-    private void ExportReviews_Click(object sender, RoutedEventArgs e)
+    /// <summary>挑要分享的评价并生成内容，还没有保存。取消或没有评价时返回 null。</summary>
+    private ReviewFile? PrepareReviews()
     {
         SaveCurrent();
         var rows = _plugins.Select(p => p.Row).Where(ReviewShare.HasReview).ToList();
         if (rows.Count == 0)
         {
             StatusText.Text = "还没有写过评价，先给插件打分或写点感受";
-            return;
+            return null;
         }
 
         var dialog = new ReviewExportDialog(rows, _database.GetSetting(ReviewAuthorNameSetting) ?? "") { Owner = this };
         if (dialog.ShowDialog() != true)
-            return;
+            return null;
 
         var author = dialog.Author;
-        var safeName = string.Concat(author.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
-        var save = new SaveFileDialog
-        {
-            Title = "导出评价",
-            FileName = $"{safeName}-插件评价{ReviewShare.Extension}",
-            DefaultExt = ReviewShare.Extension,
-            Filter = $"WhatPlugin 评价 (*{ReviewShare.Extension})|*{ReviewShare.Extension}",
-        };
-        if (save.ShowDialog(this) != true)
-            return;
-
         var authorId = _database.GetSetting(ReviewAuthorIdSetting);
         if (string.IsNullOrEmpty(authorId))
         {
@@ -198,8 +188,23 @@ public partial class MainWindow
             _database.SetSetting(ReviewAuthorIdSetting, authorId);
         }
         _database.SetSetting(ReviewAuthorNameSetting, author);
+        return ReviewShare.Build(authorId, author, dialog.SelectedRows, _report.Usage, dialog.Options, DateTime.UtcNow);
+    }
 
-        var file = ReviewShare.Build(authorId, author, dialog.SelectedRows, _report.Usage, dialog.Options, DateTime.UtcNow);
+    private void ExportReviews()
+    {
+        var file = PrepareReviews();
+        if (file == null)
+            return;
+        var save = new SaveFileDialog
+        {
+            Title = "导出评价",
+            FileName = $"{SafeFileName(file.Author)}-插件评价{ReviewShare.Extension}",
+            DefaultExt = ReviewShare.Extension,
+            Filter = $"WhatPlugin 评价 (*{ReviewShare.Extension})|*{ReviewShare.Extension}",
+        };
+        if (!FileDialogs.Show(save, this))
+            return;
         try
         {
             File.WriteAllText(save.FileName, ReviewShare.Serialize(file), new UTF8Encoding(false));
@@ -212,20 +217,12 @@ public partial class MainWindow
         }
     }
 
-    private void ImportReviews_Click(object sender, RoutedEventArgs e)
+    private void ImportReviews(string path)
     {
-        var open = new OpenFileDialog
-        {
-            Title = "导入评价",
-            Filter = $"WhatPlugin 评价 (*{ReviewShare.Extension})|*{ReviewShare.Extension}",
-        };
-        if (open.ShowDialog(this) != true)
-            return;
-
         ReviewFile file;
         try
         {
-            file = ReviewShare.Read(open.FileName);
+            file = ReviewShare.Read(path);
         }
         catch (Exception error) when (error is FormatException or IOException or UnauthorizedAccessException)
         {
@@ -233,17 +230,28 @@ public partial class MainWindow
             return;
         }
 
-        if (file.AuthorId == _database.GetSetting(ReviewAuthorIdSetting))
+        if (CheckReviewFile(file) is { } blocked)
         {
-            StatusText.Text = "这是你自己导出的评价，不需要导入";
+            StatusText.Text = blocked;
             return;
         }
-        if (file.Reviews.Count == 0)
-        {
-            StatusText.Text = "这份文件里没有可用的评价";
+        if (!Dialogs.Confirm(this, "导入评价", DescribeReviewFile(file), "导入"))
             return;
-        }
+        StatusText.Text = ApplyReviewFile(file);
+    }
 
+    /// <summary>不能导入的原因；能导入时返回 null。</summary>
+    private string? CheckReviewFile(ReviewFile file)
+    {
+        if (file.AuthorId == _database.GetSetting(ReviewAuthorIdSetting))
+            return "这是你自己导出的评价，不需要导入";
+        if (file.Reviews.Count == 0)
+            return "这份文件里没有可用的评价";
+        return null;
+    }
+
+    private string DescribeReviewFile(ReviewFile file)
+    {
         var sources = _database.LoadReviewSources();
         var preview = new ReviewSource(0, file.AuthorId, file.Author, DateTime.UtcNow, file.Reviews.Count);
         var matched = new ReviewLibrary(file.Reviews.Select(r => new AttributedReview(preview, r))).CountMatched(preview, _plugins.Select(p => p.Row));
@@ -252,12 +260,15 @@ public partial class MainWindow
             message.Append($"\n\n会替换之前导入的 {existing.Count} 条“{existing.Name}”的评价。");
         else if (sources.Any(s => s.Name == file.Author))
             message.Append($"\n\n已有另一位也叫“{file.Author}”的分享者，两份评价会分开保存。");
-        if (!Dialogs.Confirm(this, "导入评价", message.ToString(), "导入"))
-            return;
+        return message.ToString();
+    }
 
+    /// <summary>保存别人的评价，返回给状态栏的说明。</summary>
+    private string ApplyReviewFile(ReviewFile file)
+    {
         _database.SaveReviewFile(file, DateTime.UtcNow);
         ReloadReviews();
-        StatusText.Text = $"已导入 {file.Author} 的 {file.Reviews.Count} 条评价";
+        return $"已导入 {file.Author} 的 {file.Reviews.Count} 条评价";
     }
 
     private void RemoveReviewSource_Click(object sender, RoutedEventArgs e)

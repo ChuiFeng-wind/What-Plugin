@@ -93,6 +93,7 @@ public partial class MainWindow
         }
 
         _noteRoots = Children(null);
+        ApplyMultiMode();
         _buildingNoteTree = true;
         NoteTree.ItemsSource = _noteRoots;
         _buildingNoteTree = false;
@@ -197,6 +198,7 @@ public partial class MainWindow
         if (_shownChain != null)
             ShowChainContent(_shownChain);
         ShowChainCandidates();
+        ShowBatchPanel();
     }
 
     private void ShowFolderDetail(NoteFolder folder)
@@ -733,19 +735,50 @@ public partial class MainWindow
         var ids = MixNotes.Subtree(folder.Id, _noteFolders);
         var notes = _chains.Count(c => c.FolderId == folder.Id);
         var subfolders = _noteFolders.Count(f => f.ParentId == folder.Id);
+        // 连子文件夹里的也算，勾选“同时删除笔记”时删的是这些。
+        var allNotes = _chains.Count(c => c.FolderId is { } f && ids.Contains(f));
         var parent = FolderPathText(folder.ParentId);
-        var message = notes + subfolders == 0
-            ? $"删除空文件夹“{folder.Name}”？"
-            : $"删除文件夹“{folder.Name}”？里面的 {notes} 条笔记和 {subfolders} 个子文件夹会移到“{parent}”，不会删除任何笔记。";
-        if (!Dialogs.Confirm(this, "删除文件夹", message, "删除文件夹", danger: true))
+        var withNotes = false;
+        bool confirmed;
+        if (allNotes == 0)
+        {
+            confirmed = Dialogs.Confirm(this, "删除文件夹", subfolders == 0
+                ? $"删除空文件夹“{folder.Name}”？"
+                : $"删除文件夹“{folder.Name}”？里面的 {subfolders} 个子文件夹会移到“{parent}”。", "删除文件夹", danger: true);
+        }
+        else
+        {
+            var option = ids.Count > 1
+                ? $"同时删除笔记：这个文件夹和子文件夹里的 {allNotes} 条笔记、{ids.Count - 1} 个子文件夹一起删除，不能恢复"
+                : $"同时删除笔记：里面的 {allNotes} 条笔记一起删除，不能恢复";
+            var inside = string.Join("和", new[] { notes > 0 ? $"{notes} 条笔记" : "", subfolders > 0 ? $"{subfolders} 个子文件夹" : "" }.Where(s => s.Length > 0));
+            confirmed = Dialogs.Confirm(this, "删除文件夹",
+                $"删除文件夹“{folder.Name}”？里面的 {inside}会移到“{parent}”，不会删除任何笔记。",
+                "删除文件夹", option, ref withNotes);
+        }
+        if (!confirmed)
             return;
-        FlushChain();
+        if (withNotes)
+        {
+            // 取消等待中的保存，否则会往已删除的笔记写。
+            _chainSaveTimer.Stop();
+            _shownChain = null;
+        }
+        else
+            FlushChain();
         RememberExpansion();
+        foreach (var id in ids)
+            _collapsedNoteFolders.Remove(id);
+        if (withNotes)
+        {
+            var deleted = _database.DeleteNoteFolderWithNotes(folder.Id);
+            LoadChains(selectFolder: folder.ParentId);
+            StatusText.Text = $"已删除文件夹“{folder.Name}”和里面的 {deleted} 条笔记";
+            return;
+        }
         _database.DeleteNoteFolder(folder.Id);
-        _collapsedNoteFolders.Remove(folder.Id);
         LoadChains(selectFolder: folder.ParentId);
-        StatusText.Text = $"已删除文件夹“{folder.Name}”，里面的内容移到了“{parent}”";
-        _ = ids;
+        StatusText.Text = $"已删除文件夹“{folder.Name}”" + (notes + subfolders > 0 ? $"，里面的内容移到了“{parent}”" : "");
     }
 
     // ---------- 拖动到文件夹 ----------
@@ -756,6 +789,13 @@ public partial class MainWindow
     private void NoteTree_MouseDown(object sender, MouseButtonEventArgs e)
     {
         _dragStart = e.GetPosition(NoteTree);
+        _dragNode = null;
+        if (HandleMarkClick(e))
+        {
+            // 这次点击只用来多选，不切换显示的内容。
+            e.Handled = true;
+            return;
+        }
         _dragNode = NodeAt(e.OriginalSource);
     }
 
@@ -768,6 +808,9 @@ public partial class MainWindow
             return;
         var node = _dragNode;
         _dragNode = null;
+        // 拖的是多选里的一项时，选中的一起移动，所以松开时不清空、不取消。
+        _clearMarksOnUp = false;
+        _toggleOnUp = null;
         DragDrop.DoDragDrop(NoteTree, new DataObject(typeof(NoteNode), node), DragDropEffects.Move);
     }
 
@@ -781,7 +824,9 @@ public partial class MainWindow
     {
         if (!DropTarget(e, out var target) || e.Data.GetData(typeof(NoteNode)) is not NoteNode dragged)
             return;
-        if (dragged.IsFolder)
+        if (dragged.IsMarked)
+            MoveBatch(CurrentBatch(), target);
+        else if (dragged.IsFolder)
             MoveFolder(dragged.Id, target);
         else
             MoveNote(dragged.Id, target);
@@ -801,6 +846,9 @@ public partial class MainWindow
             { IsFolder: false } node => _chains.FirstOrDefault(c => c.Id == node.Id)?.FolderId,
             _ => null,
         };
+        // 多选一起拖：不能放进选中的文件夹自己里面。
+        if (dragged.IsMarked)
+            return !(folder is { } inside && CurrentBatch().Inside.Contains(inside));
         if (dragged.IsFolder)
         {
             var current = _noteFolders.FirstOrDefault(f => f.Id == dragged.Id)?.ParentId;
@@ -1004,6 +1052,42 @@ public sealed class NoteNode : INotifyPropertyChanged
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
         }
     }
+
+    private bool _isMarked;
+
+    /// <summary>多选里选中的（Ctrl、Shift 点击）。和 IsSelected 分开：IsSelected 是右边正在显示的那一项。</summary>
+    public bool IsMarked
+    {
+        get => _isMarked;
+        set
+        {
+            if (_isMarked == value)
+                return;
+            _isMarked = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMarked)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MarkTag)));
+        }
+    }
+
+    /// <summary>给树节点的样式用：多选选中时是 "Marked"。</summary>
+    public string? MarkTag => _isMarked ? "Marked" : null;
+
+    private bool _showMarkBox;
+
+    /// <summary>打开“多选”时每一行前面显示勾选框。</summary>
+    public bool ShowMarkBox
+    {
+        get => _showMarkBox;
+        set
+        {
+            if (_showMarkBox == value)
+                return;
+            _showMarkBox = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MarkBoxVisibility)));
+        }
+    }
+
+    public Visibility MarkBoxVisibility => _showMarkBox ? Visibility.Visible : Visibility.Collapsed;
 
     public static NoteNode ForFolder(NoteFolder folder, List<NoteNode> children, int notes) => new()
     {

@@ -6,26 +6,36 @@ using WhatPlugin.Core;
 
 namespace WhatPlugin.App;
 
-/// <summary>混音笔记的导出和导入，和评价分享分开。导入的笔记放进单独的文件夹，不覆盖自己的笔记。</summary>
+/// <summary>混音笔记的导出和导入，和评价分享分开，入口在左下角的“导出备份”“导入备份”。导入的笔记放进单独的文件夹，不覆盖自己的笔记。</summary>
 public partial class MainWindow
 {
-    private void ExportNotes_Click(object sender, RoutedEventArgs e)
+    /// <summary>挑要分享的笔记并生成内容，还没有保存。author 是预先填好的昵称（和评价一起分享时沿用评价那一步填的）。</summary>
+    private NoteFile? PrepareNotes(string? author = null)
     {
         FlushChain();
         var chains = _database.LoadChains();
         if (chains.Count == 0)
         {
             StatusText.Text = "还没有混音笔记，先新建一条或从工程导入轨道";
-            return;
+            return null;
         }
 
         var folders = _database.LoadNoteFolders();
-        var dialog = new NoteExportDialog(chains, folders, _database.GetSetting(ReviewAuthorNameSetting) ?? "") { Owner = this };
+        var dialog = new NoteExportDialog(chains, folders, author ?? _database.GetSetting(ReviewAuthorNameSetting) ?? "") { Owner = this };
         if (dialog.ShowDialog() != true)
-            return;
+            return null;
 
-        var author = dialog.Author;
-        var safeName = string.Concat(author.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        if (dialog.Author.Length > 0)
+            _database.SetSetting(ReviewAuthorNameSetting, dialog.Author);
+        return NoteShare.Build(dialog.Author, dialog.SelectedChains, folders, _database.LoadRoutes(), dialog.IncludeRouting, DateTime.UtcNow);
+    }
+
+    private void ExportNotes()
+    {
+        var file = PrepareNotes();
+        if (file == null)
+            return;
+        var safeName = SafeFileName(file.Author);
         var save = new SaveFileDialog
         {
             Title = "导出混音笔记",
@@ -33,12 +43,8 @@ public partial class MainWindow
             DefaultExt = NoteShare.Extension,
             Filter = $"WhatPlugin 混音笔记 (*{NoteShare.Extension})|*{NoteShare.Extension}",
         };
-        if (save.ShowDialog(this) != true)
+        if (!FileDialogs.Show(save, this))
             return;
-
-        if (author.Length > 0)
-            _database.SetSetting(ReviewAuthorNameSetting, author);
-        var file = NoteShare.Build(author, dialog.SelectedChains, folders, _database.LoadRoutes(), dialog.IncludeRouting, DateTime.UtcNow);
         try
         {
             File.WriteAllText(save.FileName, NoteShare.Serialize(file), new UTF8Encoding(false));
@@ -50,32 +56,39 @@ public partial class MainWindow
         }
     }
 
-    private void ImportNotes_Click(object sender, RoutedEventArgs e)
+    private void ImportNotes(string path)
     {
-        var open = new OpenFileDialog
-        {
-            Title = "导入混音笔记",
-            Filter = $"WhatPlugin 混音笔记 (*{NoteShare.Extension})|*{NoteShare.Extension}",
-        };
-        if (open.ShowDialog(this) != true)
-            return;
-
         NoteFile file;
         try
         {
-            file = NoteShare.Read(open.FileName);
+            file = NoteShare.Read(path);
         }
         catch (Exception error) when (error is FormatException or IOException or UnauthorizedAccessException)
         {
             StatusText.Text = "导入失败：" + error.Message;
             return;
         }
-        if (file.Notes.Count == 0)
+        if (CheckNoteFile(file) is { } blocked)
         {
-            StatusText.Text = "这份文件里没有可用的混音笔记";
+            StatusText.Text = blocked;
             return;
         }
+        if (!Dialogs.Confirm(this, "导入混音笔记", DescribeNoteFile(file), "导入"))
+            return;
+        StatusText.Text = ApplyNoteFile(file);
+    }
 
+    private static string? CheckNoteFile(NoteFile file) =>
+        file.Notes.Count == 0 ? "这份文件里没有可用的混音笔记" : null;
+
+    private int MissingPlugins(NoteFile file)
+    {
+        var rows = _plugins.Select(p => p.Row).ToList();
+        return file.Picks.Count(p => ChainReport.Resolve(p, rows).State == ChainStepState.Missing);
+    }
+
+    private string DescribeNoteFile(NoteFile file)
+    {
         var rows = _plugins.Select(p => p.Row).ToList();
         var picks = file.Picks;
         var missing = picks.Count(p => ChainReport.Resolve(p, rows).State == ChainStepState.Missing);
@@ -88,20 +101,24 @@ public partial class MainWindow
         message.Append($"\n\n会放进新文件夹“{root}”，保留原来的子文件夹，不会改动你已有的笔记。");
         if (file.Author.Length > 0)
             message.Append("昵称由分享者自己填写，不能证明身份。");
-        if (!Dialogs.Confirm(this, "导入混音笔记", message.ToString(), "导入"))
-            return;
+        return message.ToString();
+    }
 
+    /// <summary>导入到新文件夹，返回给状态栏的说明。</summary>
+    private string ApplyNoteFile(NoteFile file)
+    {
         FlushChain();
+        var missing = MissingPlugins(file);
         try
         {
-            var (folder, count) = _database.ImportSharedNotes(root, file.Notes);
+            var (folder, count) = _database.ImportSharedNotes(NoteShare.RootFolderName(file), file.Notes);
             RememberExpansion();
             LoadChains(selectFolder: folder.Id);
-            StatusText.Text = $"已导入 {count} 条混音笔记到“{folder.Name}”" + (missing > 0 ? $"，{missing} 款插件没有安装，可以在笔记里一键加入心愿单" : "");
+            return $"已导入 {count} 条混音笔记到“{folder.Name}”" + (missing > 0 ? $"，{missing} 款插件没有安装，可以在笔记里一键加入心愿单" : "");
         }
         catch (Exception error) when (error is Microsoft.Data.Sqlite.SqliteException or ArgumentException)
         {
-            StatusText.Text = "导入失败：" + error.Message;
+            return "混音笔记导入失败：" + error.Message;
         }
     }
 }

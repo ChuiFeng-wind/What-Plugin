@@ -369,7 +369,7 @@ public sealed partial class PluginDatabase : IDisposable
 
         if (current < 13)
         {
-            // 购买方式（成就里的免费、正版统计用）、发票号、使用记录和已解锁的成就。
+            // 获取方式（成就里的免费、正版统计用）、发票号、使用记录和已解锁的成就。
             if (!ColumnExists(transaction, "plugins", "purchase"))
                 Execute(transaction, "ALTER TABLE plugins ADD COLUMN purchase INTEGER NOT NULL DEFAULT 0;");
             if (!ColumnExists(transaction, "wishes", "invoice"))
@@ -961,7 +961,7 @@ public sealed partial class PluginDatabase : IDisposable
                     """;
                 update.Parameters.AddWithValue("$key", entry.Key);
                 AddUserDataParameters(update, entry.ToUserData());
-                // 旧备份没有购买方式，保留本机标过的。
+                // 旧备份没有获取方式，保留本机标过的。
                 update.Parameters.AddWithValue("$purchaseImport", entry.Purchase == null ? DBNull.Value : (int)entry.Purchase.Value);
                 if (update.ExecuteNonQuery() > 0)
                 {
@@ -1387,6 +1387,29 @@ public sealed partial class PluginDatabase : IDisposable
         }
     }
 
+    public const string PurchaseBackfillSetting = "purchases.backfilled";
+
+    /// <summary>
+    /// 只做一次：把以前就标成“已购”、但“已购账号”里还没有的插件补进去。
+    /// 以后是标成“已购”的当时就加；这里补的是加这个功能之前标的。
+    /// 做过以后记下来，用户再从“已购账号”删掉的不会被加回来。返回补了几款。
+    /// </summary>
+    public int BackfillPurchases()
+    {
+        if (GetSetting(PurchaseBackfillSetting) == "1")
+            return 0;
+        var owned = LoadWishes().Where(w => w.Status == WishStatus.Purchased).Select(w => Normalizer.Name(w.Name)).ToHashSet();
+        var drafts = LoadPlugins()
+            .Where(p => p.User.Purchase == PurchaseKind.Paid && !owned.Contains(Normalizer.Name(p.Name)))
+            .GroupBy(p => Normalizer.Name(p.Name))
+            .Select(g => new PurchaseDraft(g.First().Name, g.First().Vendor))
+            .ToList();
+        if (drafts.Count > 0)
+            UpsertPurchased(drafts);
+        SetSetting(PurchaseBackfillSetting, "1");
+        return drafts.Count;
+    }
+
     /// <summary>
     /// 从备份恢复心愿和购买信息。没给 secrets（或某条没有）时已保存的账号密码不动；
     /// 给了的，只用备份里有内容的项覆盖。解不开的旧密码（另一个 Windows 账号加密的）不覆盖。
@@ -1612,27 +1635,36 @@ public sealed partial class PluginDatabase : IDisposable
         }
     }
 
-    public void DeleteChain(long id)
+    public void DeleteChain(long id) => DeleteChains([id]);
+
+    /// <summary>一次删除多条笔记，要么全删要么都不删。返回删掉的条数。</summary>
+    public int DeleteChains(IEnumerable<long> ids)
     {
         lock (_gate)
         {
             using var transaction = _connection.BeginTransaction();
-            WriteChainSteps(transaction, id, []);
-            // 连接没有开外键约束，路由要自己删（id 可能被新笔记复用）。
-            using (var routes = _connection.CreateCommand())
-            {
-                routes.Transaction = transaction;
-                routes.CommandText = "DELETE FROM chain_routes WHERE chain_id = $id OR target_id = $id";
-                routes.Parameters.AddWithValue("$id", id);
-                routes.ExecuteNonQuery();
-            }
-            using var command = _connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = "DELETE FROM chains WHERE id = $id";
-            command.Parameters.AddWithValue("$id", id);
-            command.ExecuteNonQuery();
+            var deleted = ids.Distinct().Sum(id => DeleteChainRows(transaction, id));
             transaction.Commit();
+            return deleted;
         }
+    }
+
+    private int DeleteChainRows(SqliteTransaction transaction, long id)
+    {
+        WriteChainSteps(transaction, id, []);
+        // 连接没有开外键约束，路由要自己删（id 可能被新笔记复用）。
+        using (var routes = _connection.CreateCommand())
+        {
+            routes.Transaction = transaction;
+            routes.CommandText = "DELETE FROM chain_routes WHERE chain_id = $id OR target_id = $id";
+            routes.Parameters.AddWithValue("$id", id);
+            routes.ExecuteNonQuery();
+        }
+        using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "DELETE FROM chains WHERE id = $id";
+        command.Parameters.AddWithValue("$id", id);
+        return command.ExecuteNonQuery();
     }
 
     /// <summary>从工程导入的轨道：每条建一条笔记。和已有笔记同名时加序号，不覆盖。</summary>
@@ -1865,6 +1897,34 @@ public sealed partial class PluginDatabase : IDisposable
                 delete.ExecuteNonQuery();
             }
             transaction.Commit();
+        }
+    }
+
+    /// <summary>
+    /// 删除文件夹，连同它和所有子文件夹里的笔记一起删。返回删掉的笔记条数。
+    /// 和 <see cref="DeleteNoteFolder"/> 不同，那个会把里面的内容移到上一层。
+    /// </summary>
+    public int DeleteNoteFolderWithNotes(long id)
+    {
+        lock (_gate)
+        {
+            var folders = LoadNoteFolders();
+            if (folders.All(f => f.Id != id))
+                return 0;
+            var subtree = MixNotes.Subtree(id, folders);
+            var chains = LoadChains().Where(c => c.FolderId is { } f && subtree.Contains(f)).Select(c => c.Id).ToList();
+            using var transaction = _connection.BeginTransaction();
+            var deleted = chains.Sum(chain => DeleteChainRows(transaction, chain));
+            foreach (var folder in subtree)
+            {
+                using var delete = _connection.CreateCommand();
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM note_folders WHERE id = $id";
+                delete.Parameters.AddWithValue("$id", folder);
+                delete.ExecuteNonQuery();
+            }
+            transaction.Commit();
+            return deleted;
         }
     }
 

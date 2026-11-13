@@ -14,7 +14,7 @@ using WhatPlugin.Core;
 
 namespace WhatPlugin.App;
 
-public enum AppPage { Plugins, Blacklist, Wishes, Accounts, Projects, Lists, Idle, Settings, Chains, Health, Extension }
+public enum AppPage { Plugins, Blacklist, Wishes, Accounts, Projects, Idle, Settings, Chains, Health, Extension }
 
 public partial class MainWindow : Window
 {
@@ -52,6 +52,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        if (App.Offscreen)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = -20000;
+            Top = -20000;
+        }
         WindowEffects.Apply(this);
         StateChanged += (_, _) => UpdateWindowState();
         var databasePath = ResolveDatabasePath();
@@ -64,6 +70,14 @@ public partial class MainWindow : Window
         _saveTimer.Tick += (_, _) => SaveCurrent();
 
         LoadPlugins();
+        try
+        {
+            _database.BackfillPurchases();
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+            // 补不上不影响使用，下次启动再试。
+        }
         InitializeItems();
         InitializeProjects();
         NavPlugins.IsChecked = true;
@@ -125,15 +139,10 @@ public partial class MainWindow : Window
     private void ShowPage()
     {
         var pluginPage = _page is AppPage.Plugins or AppPage.Blacklist;
-        PlaceDetailCard(_page == AppPage.Lists);
-        // 自动清单来自混音笔记，笔记可能刚改过。
-        if (_page == AppPage.Lists)
-            LoadLists();
         PluginPage.Visibility = pluginPage ? Visibility.Visible : Visibility.Collapsed;
         WishPage.Visibility = _page == AppPage.Wishes ? Visibility.Visible : Visibility.Collapsed;
         AccountPage.Visibility = _page == AppPage.Accounts ? Visibility.Visible : Visibility.Collapsed;
         ProjectPage.Visibility = _page == AppPage.Projects ? Visibility.Visible : Visibility.Collapsed;
-        ListPage.Visibility = _page == AppPage.Lists ? Visibility.Visible : Visibility.Collapsed;
         IdlePage.Visibility = _page == AppPage.Idle ? Visibility.Visible : Visibility.Collapsed;
         ChainPage.Visibility = _page == AppPage.Chains ? Visibility.Visible : Visibility.Collapsed;
         HealthPage.Visibility = _page == AppPage.Health ? Visibility.Visible : Visibility.Collapsed;
@@ -153,7 +162,7 @@ public partial class MainWindow : Window
         }
         if (_page == AppPage.Health)
             RefreshHealth();
-        if (_page is AppPage.Projects or AppPage.Lists or AppPage.Idle or AppPage.Chains or AppPage.Health)
+        if (_page is AppPage.Projects or AppPage.Idle or AppPage.Chains or AppPage.Health)
         {
             ShowProjectStatus();
             return;
@@ -668,8 +677,36 @@ public partial class MainWindow : Window
 
     private void PurchaseKind_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (!_loadingDetail)
-            SaveCurrent(force: true);
+        if (_loadingDetail || _current == null)
+            return;
+        var before = _current.Row.User.Purchase;
+        SaveCurrent(force: true);
+        if (before != PurchaseKind.Paid && _current is { Row.User.Purchase: PurchaseKind.Paid } plugin)
+            AddToPurchases(plugin.Row);
+    }
+
+    /// <summary>
+    /// 获取方式标成“已购”时，在“已购账号”里建一条（同名的已经有了就不重复建；在心愿单里的转成已购）。
+    /// 改回别的不会删：那边可能已经填了账号和序列号。
+    /// </summary>
+    private void AddToPurchases(PluginRow row)
+    {
+        try
+        {
+            FlushItems();
+            var name = Normalizer.Name(row.Name);
+            if (_database.LoadWishes().Any(w => w.Status == WishStatus.Purchased && Normalizer.Name(w.Name) == name))
+                return;
+            var result = _database.UpsertPurchased([new PurchaseDraft(row.Name, row.Vendor)]);
+            LoadItems();
+            StatusText.Text = result.Updated > 0
+                ? $"{row.Name} 原来在心愿单，已转到“已购账号”"
+                : $"已把 {row.Name} 加到“已购账号”，可以去那里填账号和序列号";
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException error)
+        {
+            StatusText.Text = "加到已购账号失败：" + error.Message;
+        }
     }
 
     private void MixField_Changed(object sender, SelectionChangedEventArgs e)
@@ -790,7 +827,7 @@ public partial class MainWindow : Window
 
         var updated = row with { User = data };
         _current.Update(updated);
-        if (ReferenceEquals(_current, PluginGrid.SelectedItem) || _page == AppPage.Lists)
+        if (ReferenceEquals(_current, PluginGrid.SelectedItem))
         {
             ShowDerivedDetail(updated);
             UpdateAdoptionBadge(updated);
@@ -806,151 +843,6 @@ public partial class MainWindow : Window
 
     // ---------- 备份 ----------
 
-    private void Export_Click(object sender, RoutedEventArgs e)
-    {
-        SaveCurrent();
-        FlushItems();
-        FlushChain();
-        var secretCount = _database.LoadWishes().Count(w => w.Account.Length > 0 || w.Password.Length > 0 || w.Serial.Length > 0 || w.SecretsLocked)
-            + _database.LoadPlatformAccounts().Count;
-        var options = BackupDialogs.ExportOptions(this, secretCount);
-        if (options == null)
-            return;
-        var dialog = new SaveFileDialog
-        {
-            Title = "导出备份",
-            Filter = "WhatPlugin 备份 (*.json)|*.json",
-            FileName = $"WhatPlugin-备份-{DateTime.Now:yyyyMMdd}.json",
-        };
-        if (dialog.ShowDialog(this) != true)
-            return;
-
-        try
-        {
-            Mouse.OverrideCursor = Cursors.Wait;
-            var content = BackupRestore.Collect(_database, options.Value.IncludeSecrets, out var locked);
-            File.WriteAllText(dialog.FileName, UserDataBackup.Serialize(content, options.Value.IncludeSecrets ? options.Value.Password : null));
-            RecordUsage(() => _database.RecordUsage(UsageKinds.BackupExport));
-            var parts = new List<string>
-            {
-                $"{content.Plugins.Count} 款插件的记录",
-                $"{content.Wishes.Count} 条心愿和已购",
-                $"{content.Favorites.Count} 个常用清单",
-                $"{content.Chains.Count} 条插件链",
-                "设置",
-                $"{content.Reviews?.Sources?.Count ?? 0} 位分享者的评价",
-            };
-            var secrets = content.Secrets == null
-                ? "，没有包含账号密码"
-                : $"，账号密码 {content.Secrets.WishCount} 条、厂家账号 {content.Secrets.PlatformCount} 个已用备份密码加密"
-                  + (locked > 0 ? $"（{locked} 条密码是另一个 Windows 账号加密的，解不开，没有导出）" : "");
-            StatusText.Text = "已导出 " + string.Join("、", parts) + secrets;
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            StatusText.Text = "导出失败：" + error.Message;
-        }
-        finally
-        {
-            Mouse.OverrideCursor = null;
-        }
-    }
-
-    private void Import_Click(object sender, RoutedEventArgs e)
-    {
-        SaveCurrent();
-        var dialog = new OpenFileDialog { Title = "导入备份", Filter = "WhatPlugin 备份 (*.json)|*.json" };
-        if (dialog.ShowDialog(this) != true)
-            return;
-
-        try
-        {
-            var backup = UserDataBackup.Read(File.ReadAllText(dialog.FileName));
-            BackupSecrets? secrets = null;
-            if (backup.HasSecrets)
-            {
-                var password = BackupDialogs.AskPassword(this, attempt =>
-                {
-                    try
-                    {
-                        secrets = UserDataBackup.DecryptSecrets(backup, attempt);
-                        return null;
-                    }
-                    catch (BackupPasswordException error)
-                    {
-                        return error.Message;
-                    }
-                    catch (FormatException error)
-                    {
-                        return error.Message;
-                    }
-                });
-                if (password == null)
-                    return;
-                if (password.Length == 0)
-                    secrets = null;
-            }
-
-            var content = backup.Content;
-            var settings = content.Settings;
-            var lines = new List<string>
-            {
-                $"插件记录 {content.Plugins.Count} 款，心愿和已购 {content.Wishes.Count} 条",
-                $"常用清单 {content.Favorites.Count} 个，插件链 {content.Chains.Count} 条",
-            };
-            if (settings != null)
-                lines.Add($"设置 {settings.Values?.Count ?? 0} 项，工程文件夹 {settings.ProjectFolders?.Count ?? 0} 个，VST2 文件夹 {settings.Vst2Folders?.Count ?? 0} 个，忽略的插件 {settings.IgnoredProjectPlugins?.Count ?? 0} 个");
-            if (content.Reviews != null)
-                lines.Add($"别人的评价 {content.Reviews.Sources?.Count ?? 0} 位，采用记录 {content.Reviews.Adoptions?.Count ?? 0} 条");
-            lines.Add(secrets != null
-                ? $"账号密码 {secrets.WishCount} 条，厂家账号 {secrets.PlatformCount} 个"
-                : backup.HasSecrets ? "账号密码：已跳过，本机的保持不变" : "账号密码：这份备份里没有，本机的保持不变");
-            if (!Dialogs.Confirm(this, "导入备份",
-                    "备份中有：\n· " + string.Join("\n· ", lines)
-                    + "\n\n相同条目现有的内容会被覆盖，同名清单会合并，同名插件链会被备份内容替换；文件夹和忽略列表只增不减，这台电脑上不存在的文件夹不会添加。",
-                    "导入", danger: true))
-                return;
-
-            FlushItems();
-            FlushChain();
-            Mouse.OverrideCursor = Cursors.Wait;
-            RestoreSummary result;
-            try
-            {
-                result = BackupRestore.Apply(_database, content, secrets);
-                RecordUsage(() => _database.RecordUsage(UsageKinds.BackupImport, result.Plugins.Updated + result.Plugins.Added));
-            }
-            finally
-            {
-                Mouse.OverrideCursor = null;
-            }
-            ReloadAfterImport();
-
-            var done = new List<string>
-            {
-                $"插件更新 {result.Plugins.Updated} 款（另有 {result.Plugins.Added} 款当前未安装，已保留记录）",
-                $"心愿和已购新增 {result.Wishes.Added} 条、更新 {result.Wishes.Updated} 条",
-                $"常用清单 {result.Lists} 个",
-                $"插件链 {result.Chains} 条",
-            };
-            if (settings != null)
-                done.Add($"设置 {result.Settings} 项、文件夹 {result.Folders} 个" + (result.FoldersMissing > 0 ? $"（{result.FoldersMissing} 个在这台电脑上不存在，未添加）" : ""));
-            if (result.ReviewSources > 0 || result.Adoptions > 0)
-                done.Add($"别人的评价 {result.ReviewSources} 位、采用记录 {result.Adoptions} 条");
-            if (secrets != null)
-                done.Add($"账号密码 {result.WishSecrets} 条、厂家账号 {result.Platforms} 个");
-            if (result.UsageEvents > 0 || result.Achievements > 0)
-                done.Add($"使用记录 {result.UsageEvents} 条、成就 {result.Achievements} 个");
-            if (result.Uninstalls > 0)
-                done.Add($"卸载历史 {result.Uninstalls} 条");
-            StatusText.Text = "已导入：" + string.Join("；", done);
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or FormatException or Microsoft.Data.Sqlite.SqliteException)
-        {
-            StatusText.Text = "导入失败：" + error.Message;
-        }
-    }
-
     /// <summary>导入会改到几乎所有页面用的数据，包括主题和界面状态，全部重新读一遍。</summary>
     private void ReloadAfterImport()
     {
@@ -963,7 +855,6 @@ public partial class MainWindow : Window
         LoadPlugins();
         ShowDetail();
         LoadItems();
-        LoadLists();
         LoadChains();
         LoadProjectFolders();
         ReloadReviews();

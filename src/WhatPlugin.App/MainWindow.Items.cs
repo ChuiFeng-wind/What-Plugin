@@ -983,6 +983,47 @@ public partial class MainWindow
         StatusText.Text = $"已删除 {selected.Count} 条记录";
     }
 
+    // ---------- 用过的账号 ----------
+
+    /// <summary>填过的账号（已购记录和厂家账号里的），用得多的排前面。只有账号，没有密码。</summary>
+    private List<string> KnownAccounts() => _purchases.Concat(_wishes).Select(w => w.Item.Account)
+        .Concat(_platformAccounts.Values.Select(p => p.Account))
+        .Concat([PurchaseAccount.Text, PlatformAccountBox.Text])
+        .Select(a => a.Trim())
+        .Where(a => a.Length > 0)
+        .GroupBy(a => a, StringComparer.OrdinalIgnoreCase)
+        .OrderByDescending(g => g.Count())
+        .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+        .Select(g => g.First())
+        .ToList();
+
+    /// <summary>账号框旁边的下拉：列出填过的账号，点一下填进这个框。</summary>
+    private void PickAccount_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: TextBox box } button)
+            return;
+        var menu = new ContextMenu { PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        var accounts = KnownAccounts();
+        if (accounts.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "还没有填过账号。填过一次以后，可以在这里直接选", IsEnabled = false });
+        foreach (var account in accounts)
+        {
+            // 用 TextBlock 当标题：账号里的下划线不会被当成快捷键吃掉。
+            var item = new MenuItem { Header = new TextBlock { Text = account }, IsCheckable = false };
+            System.Windows.Automation.AutomationProperties.SetName(item, account);
+            if (string.Equals(account, box.Text.Trim(), StringComparison.OrdinalIgnoreCase))
+                item.FontWeight = FontWeights.SemiBold;
+            item.Click += (_, _) =>
+            {
+                box.Text = account;
+                box.Focus();
+                box.CaretIndex = box.Text.Length;
+            };
+            menu.Items.Add(item);
+        }
+        menu.IsOpen = true;
+    }
+
     private void BatchAdd_Click(object sender, RoutedEventArgs e)
     {
         FlushItems();

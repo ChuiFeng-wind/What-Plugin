@@ -58,38 +58,14 @@ public sealed class MissingViewModel(MissingPluginSummary summary, PluginRow? re
     public string SearchText => (Name + " " + string.Join(' ', Summary.Projects.Select(p => p.Name))).ToLowerInvariant();
 }
 
-/// <summary>常用清单或建议里的一款插件。</summary>
-public sealed class FavoritePluginViewModel(PluginRow row, PluginUsage? usage, AutoListItem? auto = null, bool hidden = false)
+/// <summary>添加插件时候选列表里的一款插件。</summary>
+public sealed class FavoritePluginViewModel(PluginRow row, PluginUsage? usage)
 {
     public PluginRow Row { get; } = row;
     public string Key => Row.Key;
     public string Name => Row.Name;
     public string Vendor => Row.Vendor.Length > 0 ? Row.Vendor : "未知";
     public string UsageText => UsageLabels.Summary(usage);
-
-    /// <summary>清单里第二行：自己建的清单显示工程使用次数，自动清单显示在哪些笔记里出现过。</summary>
-    public string SummaryText => auto == null ? $"{Vendor}  ·  {UsageText}" : $"{Vendor}  ·  {AutoText(auto)}";
-
-    public string StateText => hidden ? "已隐藏" : Row.IsMissing ? "未安装" : Row.User.Hidden ? "在垃圾桶" : "";
-    public Visibility StateVisibility => StateText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-
-    public Visibility ManualVisibility => auto == null ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility HideVisibility => auto != null && !hidden ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility RestoreVisibility => auto != null && hidden ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility AutoVisibility => auto != null ? Visibility.Visible : Visibility.Collapsed;
-
-    public static FavoritePluginViewModel ForAuto(AutoListItem item, bool hidden) => new(item.Plugin, null, item, hidden);
-
-    private static string AutoText(AutoListItem item)
-    {
-        var parts = new List<string>();
-        if (item.PrimaryNotes > 0)
-            parts.Add($"{item.PrimaryNotes} 条笔记首选");
-        if (item.AlternateNotes > 0)
-            parts.Add($"{item.AlternateNotes} 条备选");
-        var notes = string.Join("、", item.NoteNames.Take(4)) + (item.NoteNames.Count > 4 ? " 等" : "");
-        return string.Join("，", parts) + "：" + notes;
-    }
 
     public override string ToString() => Name;
 }

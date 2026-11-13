@@ -44,14 +44,14 @@
 
                 <StackPanel DockPanel.Dock="Bottom">
                     <Button x:Name="ExportButton" Style="{StaticResource GhostButton}" Click="Export_Click" HorizontalContentAlignment="Left"
-                            AutomationProperties.Name="导出备份" ToolTip="保存评分、备注、标签、混音属性、垃圾桶、常用清单、插件链和心愿单，不含账号密码">
+                            AutomationProperties.Name="导出备份" ToolTip="导出完整备份，或者把插件评价、混音笔记导出成文件分享给别人">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE896;" Margin="0,0,10,0"/>
                             <TextBlock Text="导出备份"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="ImportButton" Style="{StaticResource GhostButton}" Click="Import_Click" Margin="0,2,0,0" HorizontalContentAlignment="Left"
-                            AutomationProperties.Name="导入备份" ToolTip="从备份文件恢复，会覆盖相同插件的现有内容">
+                            AutomationProperties.Name="导入备份" ToolTip="选一个文件导入：完整备份、别人分享的评价或混音笔记，会自动识别是哪一种">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE898;" Margin="0,0,10,0"/>
                             <TextBlock Text="导入备份"/>
@@ -73,18 +73,11 @@
                             <TextBlock Text="插件库" VerticalAlignment="Center"/>
                         </DockPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavProjects" Style="{StaticResource NavItem}" Tag="Projects" Checked="Nav_Checked" AutomationProperties.Name="工程">
+                    <RadioButton x:Name="NavBlacklist" Style="{StaticResource NavItem}" Tag="Blacklist" Checked="Nav_Checked" AutomationProperties.Name="垃圾桶">
                         <DockPanel>
-                            <TextBlock x:Name="CountProjects" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" Margin="0,0,12,0"/>
-                            <TextBlock Text="工程" VerticalAlignment="Center"/>
-                        </DockPanel>
-                    </RadioButton>
-                    <RadioButton x:Name="NavLists" Style="{StaticResource NavItem}" Tag="Lists" Checked="Nav_Checked" AutomationProperties.Name="常用清单">
-                        <DockPanel>
-                            <TextBlock x:Name="CountLists" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE728;" Margin="0,0,12,0"/>
-                            <TextBlock Text="常用清单" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CountBlacklist" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" Margin="0,0,12,0"/>
+                            <TextBlock Text="垃圾桶" VerticalAlignment="Center"/>
                         </DockPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavChains" Style="{StaticResource NavItem}" Tag="Chains" Checked="Nav_Checked" AutomationProperties.Name="混音笔记">
@@ -94,18 +87,11 @@
                             <TextBlock Text="混音笔记" VerticalAlignment="Center"/>
                         </DockPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavIdle" Style="{StaticResource NavItem}" Tag="Idle" Checked="Nav_Checked" AutomationProperties.Name="闲置报告">
+                    <RadioButton x:Name="NavAccounts" Style="{StaticResource NavItem}" Tag="Accounts" Checked="Nav_Checked" AutomationProperties.Name="已购账号">
                         <DockPanel>
-                            <TextBlock x:Name="CountIdle" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE823;" Margin="0,0,12,0"/>
-                            <TextBlock Text="闲置报告" VerticalAlignment="Center"/>
-                        </DockPanel>
-                    </RadioButton>
-                    <RadioButton x:Name="NavHealth" Style="{StaticResource NavItem}" Tag="Health" Checked="Nav_Checked" AutomationProperties.Name="健康检查">
-                        <DockPanel>
-                            <TextBlock x:Name="CountHealth" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE9D9;" Margin="0,0,12,0"/>
-                            <TextBlock Text="健康检查" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CountAccounts" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8D7;" Margin="0,0,12,0"/>
+                            <TextBlock Text="已购账号" VerticalAlignment="Center"/>
                         </DockPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavWishes" Style="{StaticResource NavItem}" Tag="Wishes" Checked="Nav_Checked" AutomationProperties.Name="心愿单">
@@ -115,18 +101,27 @@
                             <TextBlock Text="心愿单" VerticalAlignment="Center"/>
                         </DockPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavAccounts" Style="{StaticResource NavItem}" Tag="Accounts" Checked="Nav_Checked" AutomationProperties.Name="已购账号">
+                    <!-- 分隔线不参与排序，始终跟在“健康检查”上面（见 PlaceNavDivider）。 -->
+                    <Border x:Name="NavDivider" Height="1" Background="{DynamicResource Line}" Margin="6,10" IsHitTestVisible="False"/>
+                    <RadioButton x:Name="NavHealth" Style="{StaticResource NavItem}" Tag="Health" Checked="Nav_Checked" AutomationProperties.Name="健康检查">
                         <DockPanel>
-                            <TextBlock x:Name="CountAccounts" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8D7;" Margin="0,0,12,0"/>
-                            <TextBlock Text="已购账号" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CountHealth" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE9D9;" Margin="0,0,12,0"/>
+                            <TextBlock Text="健康检查" VerticalAlignment="Center"/>
                         </DockPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavBlacklist" Style="{StaticResource NavItem}" Tag="Blacklist" Checked="Nav_Checked" AutomationProperties.Name="垃圾桶">
+                    <RadioButton x:Name="NavIdle" Style="{StaticResource NavItem}" Tag="Idle" Checked="Nav_Checked" AutomationProperties.Name="闲置报告">
                         <DockPanel>
-                            <TextBlock x:Name="CountBlacklist" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" Margin="0,0,12,0"/>
-                            <TextBlock Text="垃圾桶" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CountIdle" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE823;" Margin="0,0,12,0"/>
+                            <TextBlock Text="闲置报告" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavProjects" Style="{StaticResource NavItem}" Tag="Projects" Checked="Nav_Checked" AutomationProperties.Name="工程">
+                        <DockPanel>
+                            <TextBlock x:Name="CountProjects" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" Margin="0,0,12,0"/>
+                            <TextBlock Text="工程" VerticalAlignment="Center"/>
                         </DockPanel>
                     </RadioButton>
                     </StackPanel>
@@ -336,11 +331,9 @@
                                     </StackPanel>
 
                                     <DockPanel Margin="0,12,0,0">
-                                        <Button x:Name="AddToListButton" DockPanel.Dock="Right" Content="加入清单" Style="{StaticResource GhostButton}" Click="AddCurrentToList_Click"/>
                                         <Button x:Name="CompareCurrentButton" DockPanel.Dock="Right" Content="看同类" Style="{StaticResource GhostButton}" Click="CompareCurrent_Click" ToolTip="在左边选中这款插件所属的分类，和同类插件放在一起比较"/>
                                         <StackPanel VerticalAlignment="Center">
                                             <TextBlock x:Name="DetailUsage" Style="{StaticResource SmallNote}" TextWrapping="Wrap" AutomationProperties.AutomationId="DetailUsage"/>
-                                            <TextBlock x:Name="DetailLists" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                         </StackPanel>
                                     </DockPanel>
 
@@ -438,9 +431,9 @@
                                             <ComboBox x:Name="KindBox" SelectionChanged="KindBox_SelectionChanged" AutomationProperties.Name="类型"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="4">
-                                            <TextBlock Text="购买方式" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox x:Name="PurchaseKindBox" SelectionChanged="PurchaseKind_Changed" AutomationProperties.Name="购买方式"
-                                                      ToolTip="免费、已购还是其他方式得到的（例如捆绑赠送）。只能手动标，默认未标记">
+                                            <TextBlock Text="获取方式" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="PurchaseKindBox" SelectionChanged="PurchaseKind_Changed" AutomationProperties.Name="获取方式"
+                                                      ToolTip="免费、已购还是其他方式得到的（例如捆绑赠送）。只能手动标，默认未标记。选“已购”会自动加到“已购账号”里">
                                                 <ComboBoxItem Content="未标记"/><ComboBoxItem Content="免费"/><ComboBoxItem Content="已购"/><ComboBoxItem Content="其他"/>
                                             </ComboBox>
                                         </StackPanel>
@@ -692,122 +685,6 @@
                 </Grid>
             </Grid>
 
-            <!-- 常用清单 -->
-            <Grid x:Name="ListPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                <StackPanel Margin="0,0,0,16">
-                    <TextBlock Text="常用清单" Style="{StaticResource PageTitle}"/>
-                    <TextBlock Text="带标签的混音笔记会自动整理成清单；也可以自己建清单，比如母带常用" Style="{StaticResource PageSubtitle}"/>
-                </StackPanel>
-
-                <Grid x:Name="ListArea" Grid.Row="1">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="232"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="340"/>
-                    </Grid.ColumnDefinitions>
-
-                    <Border Style="{StaticResource Card}">
-                        <DockPanel Margin="10">
-                            <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                <Button x:Name="AddListButton" DockPanel.Dock="Right" Content="新建" Click="AddList_Click" Margin="6,0,0,0"/>
-                                <TextBox x:Name="NewListBox" KeyDown="NewListBox_KeyDown" Tag="新清单名称" AutomationProperties.Name="新清单名称"/>
-                            </DockPanel>
-                            <ListBox x:Name="ListsBox" ItemContainerStyle="{StaticResource CategoryItem}" SelectionChanged="ListsBox_SelectionChanged" AutomationProperties.Name="清单列表"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.ScrollUnit="Pixel">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <DockPanel>
-                                            <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
-                                        </DockPanel>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        </DockPanel>
-                    </Border>
-
-                    <Grid Grid.Column="1" Margin="16,0,16,0">
-                        <StackPanel x:Name="ListEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE728;" FontSize="34" Foreground="{DynamicResource LineStrong}" HorizontalAlignment="Center"/>
-                            <TextBlock Text="给混音笔记加上标签（比如人声），这里会自动整理出清单；也可以在左下角自己新建" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"
-                                       TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320"/>
-                        </StackPanel>
-                        <DockPanel x:Name="ListDetail" Visibility="Collapsed">
-                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                                <StackPanel x:Name="ManualListButtons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                                    <Button Content="添加插件" Style="{StaticResource GhostButton}" Click="ShowListCandidates_Click" ToolTip="在右边搜索并添加插件"/>
-                                    <Button Content="重命名" Style="{StaticResource GhostButton}" Click="RenameList_Click" Margin="4,0,0,0"/>
-                                    <Button Content="删除清单" Style="{StaticResource GhostButton}" Click="DeleteList_Click" Margin="4,0,0,0"/>
-                                </StackPanel>
-                                <CheckBox x:Name="ShowHiddenBox" DockPanel.Dock="Right" VerticalAlignment="Top" Margin="0,4,0,0" Checked="ShowHidden_Changed" Unchecked="ShowHidden_Changed"
-                                          AutomationProperties.AutomationId="ShowHiddenAuto"/>
-                                <StackPanel>
-                                    <TextBlock x:Name="ListTitle" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock x:Name="ListMeta" Style="{StaticResource SmallNote}" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </DockPanel>
-                            <Grid>
-                                <ListBox x:Name="ListItems" ItemContainerStyle="{StaticResource CardItem}" SelectionChanged="ListItems_SelectionChanged" AutomationProperties.Name="清单里的插件" VirtualizingPanel.ScrollUnit="Pixel"
-                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <DockPanel>
-                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button Style="{StaticResource IconButton}" Content="&#xE74A;" Tag="{Binding Key}" CommandParameter="up" Click="MoveInList_Click" AutomationProperties.Name="上移" ToolTip="上移" Visibility="{Binding ManualVisibility}"/>
-                                                    <Button Style="{StaticResource IconButton}" Content="&#xE74B;" Tag="{Binding Key}" CommandParameter="down" Click="MoveInList_Click" AutomationProperties.Name="下移" ToolTip="下移" Visibility="{Binding ManualVisibility}"/>
-                                                    <Button Style="{StaticResource IconButton}" Content="&#xE711;" Tag="{Binding Key}" Click="RemoveFromList_Click" AutomationProperties.Name="从清单移除" ToolTip="从清单移除" Visibility="{Binding ManualVisibility}"/>
-                                                    <Button Style="{StaticResource IconButton}" Content="&#xE7B3;" Tag="{Binding Key}" Click="HideInAutoList_Click" AutomationProperties.Name="{Binding Name, StringFormat=隐藏 {0}}" ToolTip="不在这个清单里显示" Visibility="{Binding HideVisibility}"/>
-                                                    <Button Style="{StaticResource IconButton}" Content="&#xED1A;" Tag="{Binding Key}" Click="RestoreInAutoList_Click" AutomationProperties.Name="{Binding Name, StringFormat=恢复 {0}}" ToolTip="已隐藏，点一下重新显示在这个清单里" Visibility="{Binding RestoreVisibility}"/>
-                                                    <Button Style="{StaticResource IconButton}" Content="&#xE74D;" Tag="{Binding Key}" Click="DeleteFromAutoList_Click" AutomationProperties.Name="{Binding Name, StringFormat=从笔记里删除 {0}}" ToolTip="从带这个标签的笔记里删除这款插件" Visibility="{Binding AutoVisibility}"/>
-                                                </StackPanel>
-                                                <StackPanel>
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
-                                                        <Border Background="{DynamicResource DangerSoft}" CornerRadius="5" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="{Binding StateVisibility}">
-                                                            <TextBlock Text="{Binding StateText}" FontSize="11" Foreground="{DynamicResource Danger}"/>
-                                                        </Border>
-                                                    </StackPanel>
-                                                    <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" Text="{Binding SummaryText}" ToolTip="{Binding SummaryText}"/>
-                                                </StackPanel>
-                                            </DockPanel>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                                <TextBlock x:Name="ListItemsEmpty" Text="从右边添加插件" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                            </Grid>
-                        </DockPanel>
-                    </Grid>
-
-                    <Border x:Name="ListCandidatesCard" Grid.Column="2" Style="{StaticResource Card}">
-                        <DockPanel Margin="14">
-                            <TextBox x:Name="ListSearchBox" DockPanel.Dock="Top" TextChanged="ListSearch_Changed" Tag="搜索要添加的插件" AutomationProperties.Name="搜索要添加的插件"/>
-                            <TextBlock x:Name="ListCandidateLabel" DockPanel.Dock="Top" Style="{StaticResource FieldLabel}"/>
-                            <Grid>
-                                <ListBox x:Name="ListCandidates" ItemContainerStyle="{StaticResource PickItem}" AutomationProperties.Name="可添加的插件" VirtualizingPanel.ScrollUnit="Pixel">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <DockPanel>
-                                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Tag="{Binding Key}" Click="AddToList_Click" VerticalAlignment="Center"
-                                                        AutomationProperties.Name="{Binding Name, StringFormat=添加 {0}}" ToolTip="加入这个清单"/>
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding UsageText}" Foreground="{DynamicResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
-                                            </DockPanel>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                                <TextBlock x:Name="ListCandidatesEmpty" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Visibility="Collapsed"/>
-                            </Grid>
-                        </DockPanel>
-                    </Border>
-                </Grid>
-            </Grid>
-
             <!-- 混音笔记（以前叫插件链） -->
             <Grid x:Name="ChainPage" Grid.Row="1" Margin="28,0,24,0" Visibility="Collapsed">
                 <Grid.RowDefinitions>
@@ -822,10 +699,6 @@
                             <TextBlock Text="从工程导入轨道…"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ImportNotesButton" DockPanel.Dock="Right" Content="导入笔记" Style="{StaticResource GhostButton}" Click="ImportNotes_Click" VerticalAlignment="Bottom" Margin="6,0,0,0"
-                            ToolTip="导入别人分享的混音笔记，放进单独的文件夹，不会覆盖你的笔记"/>
-                    <Button x:Name="ExportNotesButton" DockPanel.Dock="Right" Content="导出笔记" Style="{StaticResource GhostButton}" Click="ExportNotes_Click" VerticalAlignment="Bottom"
-                            ToolTip="选择笔记导出成文件分享，不包含工程名和路径"/>
                     <StackPanel>
                         <TextBlock Text="混音笔记" Style="{StaticResource PageTitle}"/>
                         <TextBlock Text="按混音师、乐器分文件夹，记下每条轨道用了哪些插件、什么顺序、为什么这么用。这里只是记录，不会写入 DAW" Style="{StaticResource PageSubtitle}"/>
@@ -848,14 +721,23 @@
                                             ToolTip="建在左边选中的文件夹里"/>
                                 </UniformGrid>
                             </StackPanel>
-                            <TextBox x:Name="NoteTreeSearch" DockPanel.Dock="Top" Margin="2,2,2,6" TextChanged="NoteTreeSearch_Changed" Tag="搜索笔记、标签或插件" AutomationProperties.Name="搜索混音笔记"/>
-                            <TreeView x:Name="NoteTree" Style="{StaticResource FolderTree}" ItemContainerStyle="{StaticResource FolderTreeItem}" AllowDrop="True"
+                            <DockPanel DockPanel.Dock="Top" Margin="2,2,2,6">
+                                <ToggleButton x:Name="NoteMultiToggle" DockPanel.Dock="Right" Style="{StaticResource TagChip}" Content="多选" Margin="6,0,0,0" VerticalAlignment="Center"
+                                              Checked="NoteMulti_Changed" Unchecked="NoteMulti_Changed" AutomationProperties.Name="多选" AutomationProperties.AutomationId="NoteMultiToggle"
+                                              ToolTip="打开后逐行勾选笔记或文件夹，一起移动、加标签或删除。不打开也可以按住 Ctrl 或 Shift 点击"/>
+                                <TextBox x:Name="NoteTreeSearch" TextChanged="NoteTreeSearch_Changed" Tag="搜索笔记、标签或插件" AutomationProperties.Name="搜索混音笔记"/>
+                            </DockPanel>
+                            <TreeView x:Name="NoteTree" Style="{StaticResource FolderTree}" ItemContainerStyle="{StaticResource NoteTreeItem}" AllowDrop="True"
+                                      
                                       SelectedItemChanged="NoteTree_Selected" PreviewMouseLeftButtonDown="NoteTree_MouseDown" PreviewMouseMove="NoteTree_MouseMove"
+                                      PreviewMouseLeftButtonUp="NoteTree_MouseUp"
                                       DragOver="NoteTree_DragOver" Drop="NoteTree_Drop" ContextMenuOpening="NoteTree_ContextMenuOpening" KeyDown="NoteTree_KeyDown"
                                       AutomationProperties.Name="混音笔记分层">
                                 <TreeView.ItemTemplate>
                                     <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                                         <DockPanel x:Name="Row" ToolTip="{Binding ToolTip}" Background="Transparent">
+                                            <CheckBox DockPanel.Dock="Left" IsChecked="{Binding IsMarked, Mode=TwoWay}" Checked="NoteMark_Changed" Unchecked="NoteMark_Changed" Focusable="False" VerticalAlignment="Center" Margin="0,0,7,0"
+                                                      Visibility="{Binding MarkBoxVisibility}" AutomationProperties.Name="{Binding Name, StringFormat=选中 {0}}"/>
                                             <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="{Binding Icon}" FontSize="13" Foreground="{Binding IconBrush}" VerticalAlignment="Center" Margin="0,0,7,0"/>
                                             <Button x:Name="RenamePencil" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE70F;" FontSize="11" Width="22" Height="22" Margin="4,0,-4,0"
                                                     Focusable="False" Visibility="Hidden" Click="NoteRename_Click" ToolTip="重命名（F2）" AutomationProperties.Name="重命名"/>
@@ -893,6 +775,44 @@
                             <TextBlock x:Name="ChainEmptyText" Text="在左下角新建第一条笔记，比如“人声总线”；也可以先建文件夹，比如混音师的名字" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360"/>
                         </StackPanel>
 
+                        <!-- 多选：批量操作 -->
+                        <DockPanel x:Name="BatchDetail" Visibility="Collapsed">
+                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource DangerButton}" Click="NoteBatchDelete_Click" Margin="8,0,0,0" Padding="12,0" AutomationProperties.Name="删除选中的" AutomationProperties.AutomationId="BatchDelete">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock Text="删除" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button DockPanel.Dock="Right" Click="BatchMove_Click" Margin="8,0,0,0" Padding="12,0" AutomationProperties.Name="移动选中的到…" AutomationProperties.AutomationId="BatchMove">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8DE;" FontSize="13" Margin="0,0,6,0"/>
+                                        <TextBlock Text="移动到…" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="BatchTagRemoveButton" DockPanel.Dock="Right" Content="去掉标签…" Click="BatchRemoveTags_Click" Margin="8,0,0,0" Padding="12,0" AutomationProperties.AutomationId="BatchRemoveTags"/>
+                                <Button x:Name="BatchTagAddButton" DockPanel.Dock="Right" Content="加标签…" Click="BatchAddTags_Click" Margin="12,0,0,0" Padding="12,0" AutomationProperties.AutomationId="BatchAddTags"/>
+                                <TextBlock x:Name="NoteBatchTitle" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" AutomationProperties.AutomationId="NoteBatchTitle"/>
+                            </DockPanel>
+                            <TextBlock x:Name="BatchMeta" DockPanel.Dock="Top" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                            <Button DockPanel.Dock="Bottom" Content="取消选择" Style="{StaticResource GhostButton}" Click="ClearMarks_Click" HorizontalAlignment="Left" Margin="-10,8,0,0"
+                                    ToolTip="Esc" AutomationProperties.AutomationId="BatchClear"/>
+                            <ListBox x:Name="BatchList" ItemContainerStyle="{StaticResource CardItem}" AutomationProperties.Name="选中的笔记和文件夹" Focusable="False"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="{Binding Icon}" FontSize="14" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Path}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+
                         <!-- 选中文件夹 -->
                         <DockPanel x:Name="FolderDetail" Visibility="Collapsed">
                             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -925,7 +845,7 @@
                                              ToolTip="轨道 → 编组 → 效果轨 → 主输出。实线是输出，虚线是发送；Ctrl + 滚轮缩放，按住空白处拖动"/>
                             </StackPanel>
                             <TextBlock x:Name="FolderListHint" DockPanel.Dock="Top" Style="{StaticResource SmallNote}" TextWrapping="Wrap" Margin="0,0,0,10"
-                                       Text="左下角新建的笔记和文件夹会放在这个文件夹里。也可以把左边的笔记或文件夹拖到另一个文件夹上。"/>
+                                       Text="左下角新建的笔记和文件夹会放在这个文件夹里。也可以把左边的笔记或文件夹拖到另一个文件夹上；按住 Ctrl 或 Shift 点击可以多选，一起移动、加标签或删除。"/>
                             <Grid>
                             <local:RouteMapView x:Name="FolderMap" Visibility="Collapsed"/>
                             <ListBox x:Name="FolderNotes" ItemContainerStyle="{StaticResource CardItem}" MouseDoubleClick="FolderNotes_DoubleClick" AutomationProperties.Name="文件夹里的笔记"
@@ -1566,6 +1486,8 @@
                                         <DockPanel>
                                             <Button x:Name="CopyPlatformAccountButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" Click="CopyPlatformAccount_Click" Margin="2,0,0,0"
                                                     AutomationProperties.Name="复制厂家账号" ToolTip="复制账号"/>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE70D;" Click="PickAccount_Click" Tag="{Binding ElementName=PlatformAccountBox}" Margin="2,0,0,0"
+                                                    AutomationProperties.Name="选择用过的账号" ToolTip="选择用过的账号：填过一次的账号都在这里，点一下直接填入"/>
                                             <TextBox x:Name="PlatformAccountBox" TextChanged="PlatformField_Changed" AutomationProperties.Name="厂家账号的账号"/>
                                         </DockPanel>
                                         <TextBlock Text="密码" Style="{StaticResource FieldLabel}"/>
@@ -1649,6 +1571,8 @@
                                     <DockPanel>
                                         <Button x:Name="CopyAccountButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8C8;" Click="CopyAccount_Click" Margin="2,0,0,0"
                                                 AutomationProperties.Name="复制账号" ToolTip="复制账号"/>
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE70D;" Click="PickAccount_Click" Tag="{Binding ElementName=PurchaseAccount}" Margin="2,0,0,0"
+                                                AutomationProperties.Name="选择用过的账号" ToolTip="选择用过的账号：填过一次的账号都在这里，点一下直接填入"/>
                                         <TextBox x:Name="PurchaseAccount" TextChanged="PurchaseField_Changed" AutomationProperties.Name="账号"/>
                                     </DockPanel>
                                     <TextBlock Text="密码" Style="{StaticResource FieldLabel}"/>
@@ -1717,7 +1641,11 @@
                                 <TextBlock x:Name="BatchTitle" FontSize="19" FontWeight="SemiBold"/>
                                 <TextBlock Text="给选中的插件填同样的内容。留空的项不会改动。账号密码会存成各自的厂家账号，同厂家的插件共用；序列号每款单独保存。" Style="{StaticResource SmallNote}" Margin="0,4,0,0" TextWrapping="Wrap"/>
                                 <TextBlock Text="账号" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="BatchAccount" AutomationProperties.Name="批量账号"/>
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE70D;" Click="PickAccount_Click" Tag="{Binding ElementName=BatchAccount}" Margin="2,0,0,0"
+                                            AutomationProperties.Name="选择用过的账号" ToolTip="选择用过的账号：填过一次的账号都在这里，点一下直接填入"/>
+                                    <TextBox x:Name="BatchAccount" AutomationProperties.Name="批量账号"/>
+                                </DockPanel>
                                 <TextBlock Text="密码" Style="{StaticResource FieldLabel}"/>
                                 <local:SecretBox x:Name="BatchPassword" Label="批量密码" ShowCopy="False"/>
                                 <TextBlock Text="序列号" Style="{StaticResource FieldLabel}"/>
@@ -1836,14 +1764,10 @@
                         <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
                             <StackPanel>
                                 <DockPanel>
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                                        <Button x:Name="ExportReviewsButton" Content="导出评价" Style="{StaticResource GhostButton}" Click="ExportReviews_Click" Margin="0,0,6,0"/>
-                                        <Button x:Name="ImportReviewsButton" Content="导入评价" Click="ImportReviews_Click"/>
-                                    </StackPanel>
                                     <StackPanel>
-                                        <TextBlock Text="评价共享" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock Text="别人分享的评价" FontSize="15" FontWeight="SemiBold"/>
                                         <TextBlock Style="{StaticResource SmallNote}" Margin="0,3,12,0" TextWrapping="Wrap"
-                                                   Text="把评分、感受和标签导出成文件分享。别人的评价单独保存，不会覆盖你的内容，也不影响推荐。昵称由分享者自己填写，不能证明身份。"/>
+                                                   Text="分享评价、混音笔记都在左下角的“导出备份”“导入备份”里。导入的评价单独保存，不会覆盖你的内容，也不影响推荐。昵称由分享者自己填写，不能证明身份。"/>
                                     </StackPanel>
                                 </DockPanel>
                                 <TextBlock x:Name="ReviewSourcesEmpty" Text="还没有导入别人的评价。" Style="{StaticResource SmallNote}" Margin="0,12,0,0"/>
@@ -1862,20 +1786,6 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </StackPanel>
-                        </Border>
-
-                        <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">
-                            <DockPanel>
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                                    <Button x:Name="SettingsExportNotesButton" Content="导出笔记" Style="{StaticResource GhostButton}" Click="ExportNotes_Click" Margin="0,0,6,0"/>
-                                    <Button x:Name="SettingsImportNotesButton" Content="导入笔记" Click="ImportNotes_Click"/>
-                                </StackPanel>
-                                <StackPanel>
-                                    <TextBlock Text="笔记共享" FontSize="15" FontWeight="SemiBold"/>
-                                    <TextBlock Style="{StaticResource SmallNote}" Margin="0,3,12,0" TextWrapping="Wrap"
-                                               Text="把混音笔记（插件顺序、备选和应用思路）导出成文件分享，和评价分开。导入的笔记放进单独的文件夹，不会覆盖你的笔记。文件不包含工程名和路径。"/>
-                                </StackPanel>
-                            </DockPanel>
                         </Border>
 
                         <Border Style="{StaticResource Card}" Padding="20,18" Margin="0,0,0,12">

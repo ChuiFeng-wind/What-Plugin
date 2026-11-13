@@ -29,7 +29,7 @@ public static class UsageKinds
     public const string ProjectMissing = "project.missing";
     /// <summary>用户自己做的保存操作。每个本地小时一条，Value 是次数。</summary>
     public const string Action = "action";
-    /// <summary>插件的购买方式被用户改动。Subject 是插件标识，Previous、Value 是改动前后的 <see cref="PurchaseKind"/>。</summary>
+    /// <summary>插件的获取方式被用户改动。Subject 是插件标识，Previous、Value 是改动前后的 <see cref="PurchaseKind"/>。</summary>
     public const string PurchaseChange = "purchase.change";
 }
 

@@ -917,10 +917,21 @@
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentSoft}"/>
                         </Trigger>
+                        <!-- 多选选中的（混音笔记树）：和选中同色，左边多一条色带。 -->
+                        <Trigger Property="Tag" Value="Marked">
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            <Setter TargetName="Root" Property="BorderThickness" Value="2,0,0,0"/>
+                            <Setter TargetName="Root" Property="Padding" Value="0,0,8,0"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+    <!-- 混音笔记树：多了多选状态。 -->
+    <Style x:Key="NoteTreeItem" TargetType="TreeViewItem" BasedOn="{StaticResource FolderTreeItem}">
+        <Setter Property="Tag" Value="{Binding MarkTag}"/>
     </Style>
     <Style x:Key="FolderTree" TargetType="TreeView">
         <Setter Property="Background" Value="Transparent"/>

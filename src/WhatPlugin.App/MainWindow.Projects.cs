@@ -10,7 +10,7 @@ using WhatPlugin.Core;
 
 namespace WhatPlugin.App;
 
-/// <summary>工程反查、常用清单和闲置报告。工程文件只读，这里没有任何改动工程或插件文件的操作。</summary>
+/// <summary>工程反查和闲置报告。工程文件只读，这里没有任何改动工程或插件文件的操作。</summary>
 public partial class MainWindow
 {
     private ProjectReportResult _report = new([], [], new Dictionary<string, PluginUsage>());
@@ -26,7 +26,6 @@ public partial class MainWindow
     private CancellationTokenSource? _projectCancel;
     private bool _projectUiReady;
 
-    private List<FavoriteList> _lists = [];
     private List<IdleViewModel> _idle = [];
     private ICollectionView? _idleView;
 
@@ -39,7 +38,6 @@ public partial class MainWindow
         LoadProjectFolders();
         InitializeInsights();
         RefreshProjectReport();
-        LoadLists();
         LoadChains();
     }
 
@@ -82,7 +80,6 @@ public partial class MainWindow
         ClearIgnoredButton.Visibility = _database.LoadIgnoredProjectNames().Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshIdle();
-        ShowListDetail();
         ShowChainDetail();
         RefreshHealth();
         UpdateProjectEmpty();
@@ -95,7 +92,6 @@ public partial class MainWindow
         {
             AppPage.Projects when _projects.Count == 0 => "工程文件只会被读取，不会被修改。",
             AppPage.Projects => $"{_projects.Count} 个工程，{_projects.Count(p => p.MissingCount > 0)} 个有缺失，缺失插件 {_missing.Count} 种",
-            AppPage.Lists => DescribeLists(),
             AppPage.Idle => DescribeIdle(),
             AppPage.Chains => "混音笔记只是记录，不会写入 DAW",
             AppPage.Health => DescribeHealth(),
@@ -334,76 +330,12 @@ public partial class MainWindow
         StatusText.Text = "已恢复所有忽略的名称";
     }
 
-    // 常用清单的页面在 MainWindow.Lists.cs。
-
-    /// <summary>插件详情里的“加入清单”。</summary>
-    private void AddCurrentToList_Click(object sender, RoutedEventArgs e)
-    {
-        if (_current == null)
-            return;
-        var menu = new ContextMenu { PlacementTarget = (UIElement)sender };
-        foreach (var list in _lists)
-        {
-            var isIn = list.PluginKeys.Contains(_current.Row.Key);
-            var item = new MenuItem { Header = list.Name, IsCheckable = true, IsChecked = isIn };
-            var target = list;
-            // 用状态事件而不是 Click：辅助功能切换时不会触发 Click。初始状态已设好，不会误触发。
-            item.Checked += (_, _) => ToggleCurrentInList(target);
-            item.Unchecked += (_, _) => ToggleCurrentInList(target);
-            menu.Items.Add(item);
-        }
-        if (_lists.Count > 0)
-            menu.Items.Add(new Separator());
-        var create = new MenuItem { Header = "新建清单…" };
-        create.Click += (_, _) => CreateListWithCurrent();
-        menu.Items.Add(create);
-        menu.IsOpen = true;
-    }
-
-    private void ToggleCurrentInList(FavoriteList list)
-    {
-        if (_current == null)
-            return;
-        var key = _current.Row.Key;
-        var isIn = list.PluginKeys.Contains(key);
-        if (isIn)
-            _database.RecordFavoriteRemoval(list.Id, key);
-        _database.SetFavoriteItems(list.Id, isIn ? list.PluginKeys.Where(k => k != key) : [.. list.PluginKeys, key]);
-        LoadLists();
-        ShowUsageDetail(_current.Row);
-        StatusText.Text = isIn ? $"已从“{list.Name}”移除 {_current.Name}" : $"已把 {_current.Name} 加入“{list.Name}”";
-    }
-
-    private void CreateListWithCurrent()
-    {
-        if (_current == null)
-            return;
-        var name = Dialogs.Prompt(this, "新建清单", "清单名称，例如：人声常用", "创建", "");
-        if (name == null)
-            return;
-        try
-        {
-            var list = _database.AddFavoriteList(name);
-            _database.SetFavoriteItems(list.Id, [_current.Row.Key]);
-            LoadLists(list.Id);
-            ShowUsageDetail(_current.Row);
-            StatusText.Text = $"已新建“{list.Name}”并加入 {_current.Name}";
-        }
-        catch (ArgumentException error)
-        {
-            StatusText.Text = error.Message;
-        }
-    }
-
-    /// <summary>插件详情里的工程使用情况和所在清单。</summary>
+    /// <summary>插件详情里的工程使用情况。</summary>
     private void ShowUsageDetail(PluginRow row)
     {
         var usage = _report.Usage.GetValueOrDefault(row.Key);
         DetailUsage.Text = UsageLabels.Summary(usage);
         DetailUsage.ToolTip = usage == null ? null : string.Join("\n", usage.ProjectNames.Take(30));
-        var lists = _lists.Where(l => l.PluginKeys.Contains(row.Key)).Select(l => l.Name).ToList();
-        DetailLists.Text = lists.Count > 0 ? "所在清单：" + string.Join("、", lists) : "";
-        DetailLists.Visibility = lists.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ShowPluginInLibrary(string key)

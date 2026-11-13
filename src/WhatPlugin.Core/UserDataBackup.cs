@@ -106,7 +106,35 @@ public sealed record ReviewSourceBackup(string AuthorId, string Name, DateTime I
 /// <summary>导入的别人的评价和采用记录。</summary>
 public sealed record ReviewsBackup(IReadOnlyList<ReviewSourceBackup>? Sources, IReadOnlyList<ReviewAdoption>? Adoptions);
 
-/// <summary>一份备份的全部内容。Secrets 为 null 表示不含账号密码。</summary>
+/// <summary>
+/// 备份可以只含其中几部分。没含的部分导入时本机内容不动。
+/// 插件记录分成“评价”（评分、感受、我的标签、混音属性、适合音色）和“整理”（分类、厂家、标签修正、隐藏、黑名单、获取方式）。
+/// 账号密码依附于心愿和已购（加密内容按心愿的位置对应），没有心愿单就不能单独带。
+/// </summary>
+[Flags]
+public enum BackupParts
+{
+    None = 0,
+    Reviews = 1,
+    Organize = 2,
+    Notes = 4,
+    Wishes = 8,
+    Secrets = 16,
+    SharedReviews = 32,
+    Settings = 64,
+    Usage = 128,
+    Uninstalls = 256,
+    All = Reviews | Organize | Notes | Wishes | Secrets | SharedReviews | Settings | Usage | Uninstalls,
+}
+
+public static class BackupPartsExtensions
+{
+    /// <summary>去掉不成立的组合：没有心愿单就不带账号密码。</summary>
+    public static BackupParts Valid(this BackupParts parts) =>
+        (parts & BackupParts.All) & (parts.HasFlag(BackupParts.Wishes) ? BackupParts.All : ~BackupParts.Secrets);
+}
+
+/// <summary>一份备份的全部内容。Secrets 为 null 表示不含账号密码。Parts 是这份备份含哪几部分。</summary>
 public sealed record BackupContent(
     IReadOnlyList<BackupEntry> Plugins,
     IReadOnlyList<WishBackupEntry> Wishes,
@@ -117,7 +145,8 @@ public sealed record BackupContent(
     ReviewsBackup? Reviews,
     BackupSecrets? Secrets = null,
     UsageBackup? Usage = null,
-    IReadOnlyList<UninstallBackupEntry>? Uninstalls = null);
+    IReadOnlyList<UninstallBackupEntry>? Uninstalls = null,
+    BackupParts Parts = BackupParts.All);
 
 /// <summary>卸载历史的一条。日期为空表示 1.2.4 之前卸载的，日期未知。</summary>
 public sealed record UninstallBackupEntry(
@@ -167,10 +196,11 @@ public static class UserDataBackup
 {
     // 2：加了常用清单移出记录、设置、评价分享，以及加密的账号密码。
     // 3：想要程度改为两级；插件加了适合音色；混音笔记加了文件夹、标签和备选插件。
-    // 4：插件加了购买方式，已购加了发票号；加了使用记录和已解锁的成就。
+    // 4：插件加了获取方式，已购加了发票号；加了使用记录和已解锁的成就。
     // 5：混音笔记加了通道类型和路由（主输出、发送、侧链）。
     // 6：加了卸载历史。
-    private const int CurrentVersion = 6;
+    // 7：可以只备份其中几部分，Parts 记录含哪几部分；之前的版本都是完整备份。
+    private const int CurrentVersion = 7;
 
     private sealed record BackupFile(
         int Version,
@@ -184,7 +214,8 @@ public static class UserDataBackup
         ReviewsBackup? Reviews = null,
         EncryptedSection? Secrets = null,
         UsageBackup? Usage = null,
-        IReadOnlyList<UninstallBackupEntry>? Uninstalls = null);
+        IReadOnlyList<UninstallBackupEntry>? Uninstalls = null,
+        BackupParts? Parts = null);
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -194,13 +225,66 @@ public static class UserDataBackup
         Converters = { new JsonStringEnumConverter() },
     };
 
-    public static IReadOnlyList<BackupEntry> PluginEntries(IEnumerable<PluginRow> plugins) => plugins
-        .Where(p => p.User.HasData)
-        .Select(p => new BackupEntry(
-            p.Key, p.Name, p.AutoVendor, p.User.Rating, p.User.Note, p.User.MyTags,
-            p.User.TagsOverride, p.User.KindOverride, p.User.VendorOverride, p.User.Hidden, p.User.BlacklistReason, p.User.Mix,
-            p.User.TimbresOverride, p.User.Purchase))
-        .ToList();
+    public static IReadOnlyList<BackupEntry> PluginEntries(IEnumerable<PluginRow> plugins) =>
+        PluginEntries(plugins, BackupParts.Reviews | BackupParts.Organize);
+
+    /// <summary>只带选中的评价或整理。没选的那部分留空，选中的部分也是空的插件不写进去。</summary>
+    public static IReadOnlyList<BackupEntry> PluginEntries(IEnumerable<PluginRow> plugins, BackupParts parts)
+    {
+        var reviews = parts.HasFlag(BackupParts.Reviews);
+        var organize = parts.HasFlag(BackupParts.Organize);
+        if (!reviews && !organize)
+            return [];
+        return plugins
+            .Select(p => (Row: p, Data: KeepParts(p.User, reviews, organize)))
+            .Where(p => p.Data.HasData)
+            .Select(p => new BackupEntry(
+                p.Row.Key, p.Row.Name, p.Row.AutoVendor, p.Data.Rating, p.Data.Note, p.Data.MyTags,
+                p.Data.TagsOverride, p.Data.KindOverride, p.Data.VendorOverride, p.Data.Hidden, p.Data.BlacklistReason, p.Data.Mix,
+                p.Data.TimbresOverride, organize ? p.Data.Purchase : null))
+            .ToList();
+    }
+
+    /// <summary>只留评价或整理那部分，另一部分清空。</summary>
+    public static PluginUserData KeepParts(PluginUserData data, bool reviews, bool organize) => data with
+    {
+        Rating = reviews ? data.Rating : 0,
+        Note = reviews ? data.Note : "",
+        MyTags = reviews ? data.MyTags : [],
+        Mix = reviews ? data.Mix : null,
+        TimbresOverride = reviews ? data.TimbresOverride : null,
+        TagsOverride = organize ? data.TagsOverride : null,
+        KindOverride = organize ? data.KindOverride : null,
+        VendorOverride = organize ? data.VendorOverride : null,
+        Hidden = organize && data.Hidden,
+        BlacklistReason = organize ? data.BlacklistReason : "",
+        Purchase = organize ? data.Purchase : PurchaseKind.Unknown,
+    };
+
+    /// <summary>把备份里的一条和本机现有的合起来：没导入的那部分用本机的。</summary>
+    public static BackupEntry MergeParts(BackupEntry entry, PluginUserData local, bool reviews, bool organize)
+    {
+        if (reviews && organize)
+            return entry;
+        var data = entry.ToUserData();
+        var mine = KeepParts(local, !reviews, !organize);
+        var theirs = KeepParts(data, reviews, organize);
+        return entry with
+        {
+            Rating = reviews ? theirs.Rating : mine.Rating,
+            Note = reviews ? theirs.Note : mine.Note,
+            MyTags = reviews ? theirs.MyTags : mine.MyTags,
+            // 混音属性为空时导入会保留本机的，和以前一样。
+            Mix = reviews ? theirs.Mix : mine.Mix,
+            TimbresOverride = reviews ? theirs.TimbresOverride : mine.TimbresOverride,
+            TagsOverride = organize ? theirs.TagsOverride : mine.TagsOverride,
+            KindOverride = organize ? theirs.KindOverride : mine.KindOverride,
+            VendorOverride = organize ? theirs.VendorOverride : mine.VendorOverride,
+            Hidden = organize ? theirs.Hidden : mine.Hidden,
+            BlacklistReason = organize ? theirs.BlacklistReason : mine.BlacklistReason,
+            Purchase = organize ? entry.Purchase : null,
+        };
+    }
 
     /// <summary>只含插件、心愿、清单和插件链，不含账号密码。</summary>
     public static string Serialize(IEnumerable<PluginRow> plugins, IEnumerable<WishItem>? wishes = null, IEnumerable<FavoriteList>? favorites = null, IEnumerable<PluginChain>? chains = null) =>
@@ -223,7 +307,8 @@ public static class UserDataBackup
         }
         return JsonSerializer.Serialize(new BackupFile(
             CurrentVersion, DateTime.UtcNow, content.Plugins, content.Wishes, content.Favorites, content.Chains,
-            content.FavoriteRemovals, content.Settings, content.Reviews, secrets, content.Usage, content.Uninstalls), Options);
+            content.FavoriteRemovals, content.Settings, content.Reviews, secrets, content.Usage, content.Uninstalls,
+            content.Parts.Valid()), Options);
     }
 
     /// <exception cref="FormatException">文件不是有效的备份。</exception>
@@ -232,7 +317,9 @@ public static class UserDataBackup
         var file = ReadFile(json);
         return new LoadedBackup(file.Version, new BackupContent(
             file.Plugins, file.Wishes ?? [], file.Favorites ?? [], file.Chains ?? [],
-            file.FavoriteRemovals ?? [], file.Settings, file.Reviews, null, file.Usage, file.Uninstalls ?? []), file.Secrets);
+            file.FavoriteRemovals ?? [], file.Settings, file.Reviews, null, file.Usage, file.Uninstalls ?? [],
+            // 第 7 版之前都是完整备份。
+            (file.Parts ?? BackupParts.All).Valid()), file.Secrets);
     }
 
     /// <exception cref="BackupPasswordException">备份密码不对或文件被改过。</exception>

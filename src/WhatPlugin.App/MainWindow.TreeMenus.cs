@@ -123,6 +123,25 @@ public partial class MainWindow
             e.Handled = true;
             return;
         }
+        // 在多选的一项上右键：操作针对选中的全部。
+        if (node.IsMarked && MarkedNodes.Count > 1)
+        {
+            var batch = CurrentBatch();
+            var addTags = MenuEntry("加标签…", "", () => BatchAddTags_Click(item, new RoutedEventArgs()));
+            addTags.IsEnabled = batch.TagTargets.Count > 0;
+            var removeTags = MenuEntry("去掉标签…", "", () => BatchRemoveTags_Click(item, new RoutedEventArgs()));
+            removeTags.IsEnabled = batch.TagTargets.Any(c => c.TagList.Count > 0);
+            OpenMenu(item, e,
+                MenuEntry($"移动 {batch.Describe()}到…", "", () => BatchMove_Click(item, new RoutedEventArgs())),
+                addTags,
+                removeTags,
+                new Separator(),
+                MenuEntry($"删除 {batch.Describe()}", "", DeleteBatch, "Del"),
+                new Separator(),
+                MenuEntry("取消选择", "", ClearMarks, "Esc"));
+            return;
+        }
+        ClearMarks();
         // 先选中，右边显示的就是这一项，移动和删除都针对它。
         item.IsSelected = true;
         if (node.IsFolder)
@@ -141,6 +160,24 @@ public partial class MainWindow
 
     private void NoteTree_KeyDown(object sender, KeyEventArgs e)
     {
+        if (!IsInside<TextBox>(e.OriginalSource))
+        {
+            if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                MarkAllNotes();
+                e.Handled = true;
+                return;
+            }
+            if (MarkedNodes.Count > 0 && e.Key is Key.Escape or Key.Delete)
+            {
+                if (e.Key == Key.Escape)
+                    ClearMarks();
+                else
+                    DeleteBatch();
+                e.Handled = true;
+                return;
+            }
+        }
         if (e.Key == Key.F2 && SelectedNode is { IsEditing: false } node && !IsInside<TextBox>(e.OriginalSource))
         {
             BeginRename(node);
