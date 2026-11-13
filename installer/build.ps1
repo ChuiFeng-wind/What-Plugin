@@ -26,7 +26,7 @@ foreach ($project in 'WhatPlugin.App', 'WhatPlugin.Cli') {
     dotnet publish "src\$project" -c Release -r win-x64 --self-contained true -o dist\app -nologo --verbosity quiet `
         -p:SatelliteResourceLanguages=en -p:DebugType=none
 }
-Copy-Item 'build\plugin\WhatPluginLookup_artefacts\Release\VST3\What Plugin Lookup.vst3' dist\VST3 -Recurse
+Copy-Item 'build\plugin\WhatPluginLookup_artefacts\Release\VST3\WhatPluginLookup.vst3' dist\VST3 -Recurse
 
 # 成就包单独打包，只要它自己的 dll：WhatPlugin.Core 用主程序里的那份。
 # 成就包不在公开仓库里，没有它的源码时只打不带成就的安装包。

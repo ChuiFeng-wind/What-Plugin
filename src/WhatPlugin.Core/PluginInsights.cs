@@ -344,7 +344,7 @@ public static class LicenseMigration
         var unknown = purchased.Where(i => i.ActivatedOn.Trim().Length == 0 && i.LicenseKind == LicenseKind.Unknown).ToList();
 
         var text = new StringBuilder();
-        text.AppendLine($"What Plugin 换机清单，生成于 {now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}，当前电脑：{machine}");
+        text.AppendLine($"WhatPlugin 换机清单，生成于 {now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}，当前电脑：{machine}");
         text.AppendLine($"共 {purchased.Count} 款已购插件。这份清单不含账号、密码和序列号。");
 
         Section(text, $"换机前先在这台电脑上停用（{here.Count} 款）", "没有停用就重装系统或硬盘损坏，授权可能要找厂家重置。", here, item =>

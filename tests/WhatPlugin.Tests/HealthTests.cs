@@ -216,13 +216,16 @@ public sealed class HealthTests
         var root = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "pv-d-" + Guid.NewGuid().ToString("N"))).FullName;
         try
         {
+            Directory.CreateDirectory(Path.Combine(root, "WhatPluginLookup.vst3"));
             Directory.CreateDirectory(Path.Combine(root, "What Plugin Lookup.vst3"));
             Directory.CreateDirectory(Path.Combine(root, "Other.vst3"));
             System.IO.File.WriteAllText(Path.Combine(root, "Other2.vst3"), "");
             System.IO.File.WriteAllText(Path.Combine(root, "What Plugin Lookup.dll"), "");
             var found = PluginDiscovery.Discover([(root, PluginFormat.Vst3)]).Select(t => Path.GetFileName(t.Path)).ToList();
             Assert.Contains("Other.vst3", found);
+            Assert.DoesNotContain(found, f => f.StartsWith("WhatPluginLookup", StringComparison.Ordinal));
             Assert.DoesNotContain(found, f => f.StartsWith("What Plugin Lookup", StringComparison.Ordinal));
+            Assert.True(StockPlugins.Contains(ProjectHost.StudioOne, "WhatPluginLookup"));
             Assert.True(StockPlugins.Contains(ProjectHost.StudioOne, "What Plugin Lookup"));
         }
         finally
@@ -318,6 +321,8 @@ public sealed class HealthTests
     [Fact]
     public void RecognisesOwnPlugin()
     {
+        Assert.True(LookupExport.IsOwnPlugin(@"C:\VST3\WhatPluginLookup.vst3"));
+        Assert.True(LookupExport.IsOwnPlugin("whatpluginlookup"));
         Assert.True(LookupExport.IsOwnPlugin(@"C:\VST3\What Plugin Lookup.vst3"));
         Assert.True(LookupExport.IsOwnPlugin("what plugin lookup"));
         Assert.True(LookupExport.IsOwnPlugin(@"C:\VST3\PluginVault Lookup.vst3"));

@@ -26,7 +26,7 @@ switch (command)
         // DAW 里的查询窗口调用这里。只读，输出 JSON。
         if (!File.Exists(dbPath))
         {
-            Console.WriteLine(LookupExport.Error("还没有数据，请先打开 What Plugin 扫描插件。"));
+            Console.WriteLine(LookupExport.Error("还没有数据，请先打开 WhatPlugin 扫描插件。"));
             return 0;
         }
         try

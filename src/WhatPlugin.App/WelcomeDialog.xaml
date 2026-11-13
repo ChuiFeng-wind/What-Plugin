@@ -1,7 +1,7 @@
 <Window x:Class="WhatPlugin.App.WelcomeDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="欢迎使用 What Plugin" Width="640" SizeToContent="Height" Style="{StaticResource DialogWindow}">
+        Title="欢迎使用 WhatPlugin" Width="640" SizeToContent="Height" Style="{StaticResource DialogWindow}">
     <Window.Resources>
         <Style x:Key="FeatureCard" TargetType="Border" BasedOn="{StaticResource Card}">
             <Setter Property="Padding" Value="14,14,14,12"/>
@@ -17,13 +17,13 @@
     <Border BorderBrush="{DynamicResource LineStrong}" BorderThickness="1">
         <StackPanel Margin="28,26,28,22">
             <StackPanel Orientation="Horizontal">
-                <Border Width="44" Height="44" CornerRadius="11" AutomationProperties.Name="What Plugin 标志">
+                <Border Width="44" Height="44" CornerRadius="11" AutomationProperties.Name="WhatPlugin 标志">
                     <Border.Background>
                         <ImageBrush ImageSource="logo.png" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                     </Border.Background>
                 </Border>
                 <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="欢迎使用 What Plugin" FontSize="21" FontWeight="SemiBold"/>
+                    <TextBlock Text="欢迎使用 WhatPlugin" FontSize="21" FontWeight="SemiBold"/>
                     <TextBlock Text="给音乐人和混音师的插件管理工具" Foreground="{DynamicResource TextDim}" Margin="0,3,0,0"/>
                 </StackPanel>
             </StackPanel>

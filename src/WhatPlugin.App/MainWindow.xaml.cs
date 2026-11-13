@@ -819,7 +819,7 @@ public partial class MainWindow : Window
         var dialog = new SaveFileDialog
         {
             Title = "导出备份",
-            Filter = "What Plugin 备份 (*.json)|*.json",
+            Filter = "WhatPlugin 备份 (*.json)|*.json",
             FileName = $"WhatPlugin-备份-{DateTime.Now:yyyyMMdd}.json",
         };
         if (dialog.ShowDialog(this) != true)
@@ -859,7 +859,7 @@ public partial class MainWindow : Window
     private void Import_Click(object sender, RoutedEventArgs e)
     {
         SaveCurrent();
-        var dialog = new OpenFileDialog { Title = "导入备份", Filter = "What Plugin 备份 (*.json)|*.json" };
+        var dialog = new OpenFileDialog { Title = "导入备份", Filter = "WhatPlugin 备份 (*.json)|*.json" };
         if (dialog.ShowDialog(this) != true)
             return;
 

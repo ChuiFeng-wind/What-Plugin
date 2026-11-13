@@ -1,4 +1,4 @@
-What Plugin 使用了下列第三方软件。完整授权文本在同一文件夹中。
+WhatPlugin 使用了下列第三方软件。完整授权文本在同一文件夹中。
 
 JUCE Framework
   Copyright (c) Raw Material Software Limited
@@ -8,7 +8,7 @@ JUCE Framework
 VST 3 SDK (MIT)
   Copyright (c) Steinberg Media Technologies GmbH
   VST is a trademark of Steinberg Media Technologies GmbH.
-  What Plugin 与 Steinberg 没有关联。
+  WhatPlugin 与 Steinberg 没有关联。
 
 JUCE 内置的组件
   zlib (Zlib)、libpng (libpng-2.0)、HarfBuzz (MIT-Modern-Variant)、SheenBidi (Apache-2.0)、

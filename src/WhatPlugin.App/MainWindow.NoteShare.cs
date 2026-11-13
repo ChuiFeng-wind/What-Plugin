@@ -31,7 +31,7 @@ public partial class MainWindow
             Title = "导出混音笔记",
             FileName = (safeName.Length > 0 ? safeName + "-" : "") + $"混音笔记{NoteShare.Extension}",
             DefaultExt = NoteShare.Extension,
-            Filter = $"What Plugin 混音笔记 (*{NoteShare.Extension})|*{NoteShare.Extension}",
+            Filter = $"WhatPlugin 混音笔记 (*{NoteShare.Extension})|*{NoteShare.Extension}",
         };
         if (save.ShowDialog(this) != true)
             return;
@@ -55,7 +55,7 @@ public partial class MainWindow
         var open = new OpenFileDialog
         {
             Title = "导入混音笔记",
-            Filter = $"What Plugin 混音笔记 (*{NoteShare.Extension})|*{NoteShare.Extension}",
+            Filter = $"WhatPlugin 混音笔记 (*{NoteShare.Extension})|*{NoteShare.Extension}",
         };
         if (open.ShowDialog(this) != true)
             return;

@@ -138,9 +138,9 @@ public static class NoteShare
         }
 
         if (dto == null || dto.Format != FormatName)
-            throw new FormatException("这不是 What Plugin 的混音笔记文件。");
+            throw new FormatException("这不是 WhatPlugin 的混音笔记文件。");
         if (dto.Version > FormatVersion)
-            throw new FormatException("这份文件来自更新版本的 What Plugin，请先升级。");
+            throw new FormatException("这份文件来自更新版本的 WhatPlugin，请先升级。");
         if (dto.Notes == null)
             throw new FormatException("文件里没有混音笔记。");
         if (dto.Notes.Count > MaxNotes)

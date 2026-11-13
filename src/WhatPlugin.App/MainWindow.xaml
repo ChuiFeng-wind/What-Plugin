@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:local="clr-namespace:WhatPlugin.App"
-        Title="What Plugin" Width="1400" Height="860" MinWidth="1120" MinHeight="640"
+        Title="WhatPlugin" Width="1400" Height="860" MinWidth="1120" MinHeight="640"
         Background="{DynamicResource Bg1}" Foreground="{DynamicResource Text}"
         FontFamily="{StaticResource UiFont}" FontSize="13" WindowStartupLocation="CenterScreen" Icon="app.ico">
     <Window.Resources>
@@ -34,12 +34,12 @@
             <DockPanel Margin="14,0,14,14">
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,18,0,26">
                     <!-- 和应用图标同一个标志 -->
-                    <Border Width="30" Height="30" CornerRadius="8" AutomationProperties.Name="What Plugin 标志">
+                    <Border Width="30" Height="30" CornerRadius="8" AutomationProperties.Name="WhatPlugin 标志">
                         <Border.Background>
                             <ImageBrush ImageSource="logo.png" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Border.Background>
                     </Border>
-                    <TextBlock Text="What Plugin" FontSize="16" FontWeight="SemiBold" Margin="11,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="WhatPlugin" FontSize="16" FontWeight="SemiBold" Margin="11,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Bottom">

@@ -298,7 +298,7 @@ public partial class WavesToolWindow : Window, IWavesRunUi
             Dialogs.ShowText(this, "不能选这个位置", "这个文件夹在 Waves 的清理范围里：\n" + conflict, "说明.txt");
             return;
         }
-        _backupRoot = Path.Combine(chosen, "What Plugin Waves备份");
+        _backupRoot = Path.Combine(chosen, "WhatPlugin_Waves备份");
         UpdateState();
     }
 

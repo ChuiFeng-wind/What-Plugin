@@ -1,4 +1,4 @@
-// What Plugin Lookup：在 DAW 里查备注和推荐的小窗口。
+// WhatPluginLookup：在 DAW 里查备注和推荐的小窗口。
 // 音频原样通过，零延迟。只读：不改数据库，也不加载其他插件。
 // 数据来自 WhatPlugin.Cli 的 lookup 命令，算法和主程序是同一份。
 #include <JuceHeader.h>
@@ -40,7 +40,7 @@ class Runner final : private juce::Thread
 {
 public:
     explicit Runner (std::function<void()> finishedCallback)
-        : juce::Thread ("What Plugin Lookup"), finished (std::move (finishedCallback)) {}
+        : juce::Thread ("WhatPluginLookup"), finished (std::move (finishedCallback)) {}
 
     ~Runner() override { stopThread (3000); }
 
@@ -128,7 +128,7 @@ public:
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override {}
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
-    const juce::String getName() const override { return "What Plugin Lookup"; }
+    const juce::String getName() const override { return "WhatPluginLookup"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -256,7 +256,7 @@ private:
     {
         if (findCli().existsAsFile())
             return true;
-        status.setText ("找不到 What Plugin，请先打开一次 What Plugin 主程序，再点“刷新”。"_u, juce::dontSendNotification);
+        status.setText ("找不到 WhatPlugin，请先打开一次 WhatPlugin 主程序，再点“刷新”。"_u, juce::dontSendNotification);
         return false;
     }
 
@@ -286,7 +286,7 @@ private:
         if (! json.getProperty ("ok", false))
         {
             const auto error = json.getProperty ("error", {}).toString();
-            status.setText (error.isNotEmpty() ? error : "读取失败，请确认 What Plugin 还在原来的位置。"_u, juce::dontSendNotification);
+            status.setText (error.isNotEmpty() ? error : "读取失败，请确认 WhatPlugin 还在原来的位置。"_u, juce::dontSendNotification);
             return;
         }
         // 看内容判断，不记“上一次发了什么”：连续操作时上一个结果可能还在路上。

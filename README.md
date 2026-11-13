@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="src/WhatPlugin.App/logo.png" width="96" alt="What Plugin 标志">
+<img src="src/WhatPlugin.App/logo.png" width="96" alt="WhatPlugin 标志">
 
-# What Plugin
+# WhatPlugin
 
 **给音乐人和混音师的音频插件管理软件**
 
@@ -13,7 +13,7 @@
 ![数据](https://img.shields.io/badge/%E6%95%B0%E6%8D%AE-%E4%BB%85%E5%AD%98%E6%9C%AC%E6%9C%BA-2ea44f)
 [![许可](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF-GPL--3.0-blue)](LICENSE)
 
-[下载安装](#下载安装) · [界面预览](#界面预览) · [功能一览](#功能一览) · [隐私与安全](#隐私与安全) · [常见问题](#常见问题) · [English](#english)
+[下载安装](#下载安装) · [用户手册](docs/manual/WhatPlugin-用户手册.pdf) · [界面预览](#界面预览) · [功能一览](#功能一览) · [隐私与安全](#隐私与安全) · [常见问题](#常见问题) · [English](#english)
 
 <br>
 
@@ -46,9 +46,11 @@
 - 系统要求：Windows 10 / 11，64 位。
 - 升级时直接覆盖安装，插件资料、笔记、心愿单都会保留。
 - 安装包没有数字签名，Windows 可能提示“Windows 已保护你的电脑”，点“更多信息” → “仍要运行”即可。
-- 安装时如果 DAW 开着并且加载过 What Plugin Lookup，安装程序会提示你先关闭 DAW，或者跳过这次查询插件的更新。
+- 安装时如果 DAW 开着并且加载过 WhatPluginLookup，安装程序会提示你先关闭 DAW，或者跳过这次查询插件的更新。
 
-第一次打开时有欢迎页和逐项导览，跟着走一遍就能上手。
+第一次打开时有欢迎页和逐项导览，跟着走一遍就能上手。完整的使用说明见 **[用户手册（PDF）](docs/manual/WhatPlugin-用户手册.pdf)**，每个版本的 Release 里也附了一份。
+
+> 从 1.2.6 及以前升级：软件改名为不带空格的 WhatPlugin，安装程序会自动把旧的 `What Plugin` 目录搬到 `WhatPlugin`，单独装的成就包一起带过去，旧的查询插件和快捷方式自动清理。数据不受影响。
 
 ## 界面预览
 
@@ -99,7 +101,7 @@
 ### 常用清单
 - 按笔记标签自动整理（比如“人声 常用”），按插件在笔记里出现的次数排序；也可以自己建清单。
 
-### DAW 内查询插件（What Plugin Lookup）
+### DAW 内查询插件（WhatPluginLookup）
 - 一个 VST3 小插件，挂在 DAW 里就能查看插件的笔记和推荐，不用切出去。
 - 只读取数据，音频原样通过，不增加延迟。
 
@@ -178,6 +180,7 @@ tests/                        单元测试
 
 | 版本 | 主要内容 |
 | --- | --- |
+| 1.2.7 | 改名为 WhatPlugin（去掉空格）：安装目录、查询插件、快捷方式都不再带空格，老版本升级时自动搬家；新增 PDF 用户手册 |
 | 1.2.6 | 第一次公开发布。新增新手指引：首次打开的欢迎页和左侧导航逐项导览 |
 | 1.2.5 | 卸载历史和卸载原因；修复 DAW 开着时安装报“拒绝访问” |
 | 1.2.4 | 混音笔记单独导出、导入；左侧导航自定义顺序 |
@@ -198,18 +201,18 @@ DAW 内查询插件使用 JUCE 构建，第三方组件的许可见 [installer/T
 
 ## English
 
-**What Plugin** is a Windows app for musicians and mix engineers to manage their audio plugins.
+**WhatPlugin** is a Windows app for musicians and mix engineers to manage their audio plugins.
 
 - **Scan** VST3 / VST2 plugins in an isolated process: no license pop-ups, no audio device, one crashing plugin doesn't stop the scan. Vendors are recognized from a built-in catalog of ~150 vendors.
 - **Library & health check**: browse by function or by source (vocal, drums…), rate and tag plugins, find duplicates, 32-bit leftovers and broken files.
 - **Project analysis** (read-only): see which plugins each project uses, what's missing, and which plugins you never use.
-- **Mix notes**: save effect chains with alternatives and reasoning, import tracks from Cubase / Nuendo, Studio One, REAPER and Ableton Live, and look them up inside your DAW with the What Plugin Lookup VST3.
+- **Mix notes**: save effect chains with alternatives and reasoning, import tracks from Cubase / Nuendo, Studio One, REAPER and Ableton Live, and look them up inside your DAW with the WhatPluginLookup VST3.
 - **Accounts, wishlist and trash**: remember which account bought what (passwords encrypted with DPAPI), and get reminded why you uninstalled a plugin before you buy it again.
 
 - **Waves uninstall tool (experimental)**: cleans up leftover Waves files after you confirm the list. It is still in testing and is not guaranteed to remove everything; use it at your own risk — the author is not responsible for incomplete uninstalls.
 
 All data stays on your computer. Project files are never modified, and iLok / PACE license data is never read or changed.
 
-Requires Windows 10 / 11 (x64). Download from [Releases](https://github.com/ChuiFeng-wind/What-Plugin/releases/latest). The UI is currently in Chinese only.
+Requires Windows 10 / 11 (x64). Download from [Releases](https://github.com/ChuiFeng-wind/What-Plugin/releases/latest). The UI is currently in Chinese only; a full [user manual (PDF, Chinese)](docs/manual/WhatPlugin-用户手册.pdf) is included. Since 1.2.7 the app is named WhatPlugin (no space); upgrading from older versions moves the install folder automatically.
 
 Source code in this repository is licensed under [GPL-3.0](LICENSE). The optional achievements pack is not part of this repository; it ships as a free, closed-source binary in the installers.

@@ -186,7 +186,7 @@ public partial class MainWindow
             Title = "导出评价",
             FileName = $"{safeName}-插件评价{ReviewShare.Extension}",
             DefaultExt = ReviewShare.Extension,
-            Filter = $"What Plugin 评价 (*{ReviewShare.Extension})|*{ReviewShare.Extension}",
+            Filter = $"WhatPlugin 评价 (*{ReviewShare.Extension})|*{ReviewShare.Extension}",
         };
         if (save.ShowDialog(this) != true)
             return;
@@ -217,7 +217,7 @@ public partial class MainWindow
         var open = new OpenFileDialog
         {
             Title = "导入评价",
-            Filter = $"What Plugin 评价 (*{ReviewShare.Extension})|*{ReviewShare.Extension}",
+            Filter = $"WhatPlugin 评价 (*{ReviewShare.Extension})|*{ReviewShare.Extension}",
         };
         if (open.ShowDialog(this) != true)
             return;

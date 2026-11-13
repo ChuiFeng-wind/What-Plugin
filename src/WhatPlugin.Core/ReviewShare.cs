@@ -133,9 +133,9 @@ public static class ReviewShare
         }
 
         if (dto == null || dto.Format != FormatName)
-            throw new FormatException("这不是 What Plugin 的评价文件。");
+            throw new FormatException("这不是 WhatPlugin 的评价文件。");
         if (dto.Version > FormatVersion)
-            throw new FormatException("这份文件来自更新版本的 What Plugin，请先升级。");
+            throw new FormatException("这份文件来自更新版本的 WhatPlugin，请先升级。");
 
         var authorId = Clean(dto.AuthorId, 64, multiline: false);
         var author = Clean(dto.Author, MaxAuthorLength, multiline: false);

@@ -11,8 +11,8 @@ add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce EXCLUDE_FROM_ALL)
 
 # Standalone 只用来开发时测试界面，发布的是 VST3。
 juce_add_plugin(WhatPluginLookup
-    PRODUCT_NAME "What Plugin Lookup"
-    COMPANY_NAME "What Plugin"
+    PRODUCT_NAME "WhatPluginLookup"
+    COMPANY_NAME "WhatPlugin"
     BUNDLE_ID com.whatplugin.lookup
     PLUGIN_MANUFACTURER_CODE PVlt
     PLUGIN_CODE PVlk

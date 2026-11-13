@@ -10,10 +10,10 @@ namespace WhatPlugin.Core;
 public static class LookupExport
 {
     /// <summary>扫描时跳过的文件名，也是这个查询窗口自己。它不是要管理的插件。</summary>
-    public const string OwnPluginName = "What Plugin Lookup";
+    public const string OwnPluginName = "WhatPluginLookup";
 
-    /// <summary>改名前的名字。老工程里可能还记着它，不能报成缺失。</summary>
-    public const string LegacyOwnPluginName = "PluginVault Lookup";
+    /// <summary>改名前的名字（PluginVault 时期、1.2.6 及以前带空格的名字）。老工程里可能还记着它们，不能报成缺失。</summary>
+    public static readonly string[] LegacyOwnPluginNames = ["What Plugin Lookup", "PluginVault Lookup"];
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -25,7 +25,7 @@ public static class LookupExport
     {
         var name = Path.GetFileNameWithoutExtension(pathOrName);
         return name.Equals(OwnPluginName, StringComparison.OrdinalIgnoreCase)
-            || name.Equals(LegacyOwnPluginName, StringComparison.OrdinalIgnoreCase);
+            || LegacyOwnPluginNames.Any(n => name.Equals(n, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>查询窗口靠这个文件找到命令行工具。用 --db 试验时不写，免得指向测试版本。</summary>

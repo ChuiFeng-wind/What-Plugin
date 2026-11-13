@@ -4,9 +4,9 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
-    <Version>1.2.6</Version>
-    <Product>What Plugin</Product>
-    <Company>What Plugin</Company>
+    <Version>1.2.7</Version>
+    <Product>WhatPlugin</Product>
+    <Company>WhatPlugin</Company>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>WhatPlugin</AssemblyName>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

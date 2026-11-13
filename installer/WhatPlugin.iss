@@ -1,10 +1,15 @@
-﻿; What Plugin 安装包。由 installer\build.ps1 调用。
+﻿; WhatPlugin 安装包。由 installer\build.ps1 调用。
 ; /DTestInstall 生成试装版：不要管理员权限，所有文件都装到 TestRoot，不碰系统目录。
 
-#define AppName "What Plugin"
-#define AppVersion "1.2.6"
-#define Vst3Name "What Plugin Lookup.vst3"
+#define AppName "WhatPlugin"
+#define AppVersion "1.2.7"
+#define Vst3Name "WhatPluginLookup.vst3"
 #define LegacyVst3Name "PluginVault Lookup.vst3"
+; 1.2.6 及以前名字里带空格：插件、安装目录、快捷方式都叫 "What Plugin…"，升级时清理掉。
+#define OldVst3Name "What Plugin Lookup.vst3"
+#define OldDirName "What Plugin"
+#define MainAppId "{7E3C1B52-9A44-4F0E-8C21-5D6A0F7B91C3}"
+#define AchievementsAppId "{4C6F0B9E-2D71-4A8B-9E35-8B1D7F2A6C40}"
 
 #ifdef TestInstall
   #define Vst3Folder TestRoot + "\VST3"
@@ -35,15 +40,16 @@ Compression=lzma2
 SolidCompression=yes
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
+; 默认位置由 DefaultAppDir 决定：老用户装在带空格的 "What Plugin" 里时，换到同一位置下的 "WhatPlugin"。
+UsePreviousAppDir=no
+DefaultDirName={code:DefaultAppDir}
 #ifdef TestInstall
 PrivilegesRequired=lowest
-DefaultDirName={#TestRoot}\app
 OutputDir={#TestRoot}
 OutputBaseFilename=WhatPlugin-Setup-Test
 #else
 ; VST3 插件要装到系统目录，所以需要管理员权限。
 PrivilegesRequired=admin
-DefaultDirName={autopf}\What Plugin
 OutputDir=..\dist
 #ifdef WithAchievements
 OutputBaseFilename=WhatPlugin-Setup-{#AppVersion}-with-Achievements
@@ -136,12 +142,18 @@ WizardUninstalling=卸载状态
 StatusUninstalling=正在卸载 %1...
 
 [Tasks]
-Name: "vst3"; Description: "安装 DAW 内查询窗口（VST3 插件 What Plugin Lookup）"
+Name: "vst3"; Description: "安装 DAW 内查询窗口（VST3 插件 WhatPluginLookup）"
 Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: unchecked
 
 [InstallDelete]
 ; 只删除这个软件自己的旧插件。名字和新插件不同但 ID 相同，留着 DAW 里会出现冲突。
 Type: filesandordirs; Name: "{#Vst3Folder}\{#LegacyVst3Name}"; Tasks: vst3; Check: InstallVst3
+Type: filesandordirs; Name: "{#Vst3Folder}\{#OldVst3Name}"; Tasks: vst3; Check: InstallVst3
+#ifndef TestInstall
+; 旧名字的快捷方式，指向的旧目录升级后会删掉。
+Type: files; Name: "{autoprograms}\{#OldDirName}.lnk"
+Type: files; Name: "{autodesktop}\{#OldDirName}.lnk"
+#endif
 
 [Files]
 Source: "..\dist\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -149,13 +161,16 @@ Source: "..\src\WhatPlugin.App\app.ico"; DestDir: "{app}"; DestName: "WhatPlugin
 #ifdef WithAchievements
 ; 带成就的完整版：成就包和主程序一起装，卸载主程序时一起删掉。
 Source: "..\dist\achievements\WhatPlugin.Achievements.dll"; DestDir: "{app}\Extensions\Achievements"; Flags: ignoreversion
+#else
+; 从旧目录搬家时，把单独装的成就包一起带到新目录，不用重装。
+Source: "{code:OldAchievementsDll}"; DestDir: "{app}\Extensions\Achievements"; Flags: external skipifsourcedoesntexist ignoreversion; Check: MoveAchievements
 #endif
 Source: "..\dist\VST3\{#Vst3Name}\*"; DestDir: "{#Vst3Folder}\{#Vst3Name}"; Flags: ignoreversion recursesubdirs createallsubdirs; Tasks: vst3; Check: InstallVst3
 
 [Icons]
 #ifndef TestInstall
-Name: "{autoprograms}\What Plugin"; Filename: "{app}\WhatPlugin.exe"; IconFilename: "{app}\WhatPlugin.ico"
-Name: "{autodesktop}\What Plugin"; Filename: "{app}\WhatPlugin.exe"; IconFilename: "{app}\WhatPlugin.ico"; Tasks: desktopicon
+Name: "{autoprograms}\WhatPlugin"; Filename: "{app}\WhatPlugin.exe"; IconFilename: "{app}\WhatPlugin.ico"
+Name: "{autodesktop}\WhatPlugin"; Filename: "{app}\WhatPlugin.exe"; IconFilename: "{app}\WhatPlugin.ico"; Tasks: desktopicon
 #endif
 
 [Run]
@@ -163,18 +178,21 @@ Name: "{autodesktop}\What Plugin"; Filename: "{app}\WhatPlugin.exe"; IconFilenam
 ; 刷新当前用户的图标缓存，桌面和开始菜单换成新图标。
 Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden nowait skipifdoesntexist runasoriginaluser
 ; 必须以普通用户身份运行，否则数据会写到管理员账号下。
-Filename: "{app}\WhatPlugin.exe"; Description: "打开 What Plugin"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{app}\WhatPlugin.exe"; Description: "打开 WhatPlugin"; Flags: nowait postinstall skipifsilent runasoriginaluser
 #endif
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{#Vst3Folder}\{#Vst3Name}"
+Type: filesandordirs; Name: "{#Vst3Folder}\{#OldVst3Name}"
 
 [Code]
-// DAW 打开着、并且加载过 What Plugin Lookup 时，Windows 不允许删除或覆盖这个 .vst3 文件，
+// DAW 打开着、并且加载过 WhatPluginLookup 时，Windows 不允许删除或覆盖这个 .vst3 文件，
 // 复制到一半会弹“DeleteFile failed; code 5. 拒绝访问”。安装程序自带的“关闭正在使用的程序”
 // 只检查 .exe/.dll，不认 .vst3，所以开始复制之前自己检查一次。
 var
   SkipVst3: Boolean;
+  PrevDir: String;   // 上次安装的位置，第一次安装为空
+  MoveFrom: String;  // 要搬走的旧目录（带空格的 "What Plugin"），不用搬时为空
 
 function InstallVst3(): Boolean;
 begin
@@ -200,7 +218,104 @@ end;
 function Vst3InUse(): Boolean;
 begin
   Result := FileInUse(ExpandConstant('{#Vst3Folder}\{#Vst3Name}\Contents\x86_64-win\{#Vst3Name}'))
+    or FileInUse(ExpandConstant('{#Vst3Folder}\{#OldVst3Name}\Contents\x86_64-win\{#OldVst3Name}'))
     or FileInUse(ExpandConstant('{#Vst3Folder}\{#LegacyVst3Name}\Contents\x86_64-win\{#LegacyVst3Name}'));
+end;
+
+// 某个软件登记的安装位置，从它的卸载信息里读。
+function InstalledDir(const AppId: String): String;
+var
+  Key: String;
+begin
+  Key := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' + AppId + '_is1';
+#ifdef TestInstall
+  if not RegQueryStringValue(HKCU, Key, 'InstallLocation', Result) then
+    Result := '';
+#else
+  if not RegQueryStringValue(HKLM64, Key, 'InstallLocation', Result) then
+    if not RegQueryStringValue(HKLM, Key, 'InstallLocation', Result) then
+      Result := '';
+#endif
+  Result := RemoveBackslashUnlessRoot(Result);
+end;
+
+// 只认 1.2.6 及以前的默认目录：文件夹名正好是 "What Plugin"，里面有主程序。
+function IsOldDir(const Dir: String): Boolean;
+begin
+  Result := (Dir <> '') and SameText(ExtractFileName(Dir), '{#OldDirName}') and FileExists(Dir + '\WhatPlugin.exe');
+end;
+
+function IsUnder(const Path, Dir: String): Boolean;
+begin
+  Result := (Path <> '') and (Pos(Lowercase(AddBackslash(Dir)), Lowercase(AddBackslash(Path))) = 1);
+end;
+
+function NewAppDir(): String;
+begin
+  Result := RemoveBackslashUnlessRoot(ExpandConstant('{app}'));
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  PrevDir := InstalledDir('{#MainAppId}');
+  Result := True;
+end;
+
+function DefaultAppDir(Param: String): String;
+begin
+  if IsOldDir(PrevDir) then
+    Result := AddBackslash(ExtractFileDir(PrevDir)) + '{#AppName}'
+  else if PrevDir <> '' then
+    Result := PrevDir
+  else
+#ifdef TestInstall
+    Result := '{#TestRoot}\{#AppName}';
+#else
+    Result := ExpandConstant('{autopf}\{#AppName}');
+#endif
+end;
+
+function OldAchievementsDll(Param: String): String;
+begin
+  Result := MoveFrom + '\Extensions\Achievements\WhatPlugin.Achievements.dll';
+end;
+
+function MoveAchievements(): Boolean;
+begin
+  Result := (MoveFrom <> '') and FileExists(OldAchievementsDll(''));
+end;
+
+// 旧目录里单独装的成就包：文件已经带到新目录，删掉它在“应用和功能”里的旧登记。
+procedure ForgetOldAchievements();
+var
+  Key: String;
+begin
+  if not IsUnder(InstalledDir('{#AchievementsAppId}'), MoveFrom) then
+    exit;
+  Key := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#AchievementsAppId}_is1';
+#ifdef TestInstall
+  RegDeleteKeyIncludingSubkeys(HKCU, Key);
+#else
+  RegDeleteKeyIncludingSubkeys(HKLM64, Key);
+  RegDeleteKeyIncludingSubkeys(HKLM, Key);
+#endif
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+  begin
+    MoveFrom := '';
+    if IsOldDir(PrevDir) and not SameText(PrevDir, NewAppDir()) then
+      MoveFrom := PrevDir;
+  end
+  else if (CurStep = ssPostInstall) and (MoveFrom <> '') then
+  begin
+    ForgetOldAchievements();
+    // 再确认一次，只删旧的 "What Plugin" 程序目录。数据在 %LOCALAPPDATA%\WhatPlugin，不在这里。
+    if IsOldDir(MoveFrom) then
+      DelTree(MoveFrom, True, True, True);
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -209,12 +324,23 @@ var
 begin
   Result := '';
   SkipVst3 := False;
+  // 搬家前旧目录里的主程序必须关掉，否则旧文件删不掉。
+  if IsOldDir(PrevDir) and not SameText(PrevDir, NewAppDir()) then
+    while FileInUse(PrevDir + '\WhatPlugin.exe') do
+      if SuppressibleMsgBox('WhatPlugin 正在运行，请先关闭它，然后点“重试”。' + #13#10 + #13#10 +
+           '这个版本把安装位置从“' + PrevDir + '”换成了不带空格的“' + NewAppDir() + '”，' +
+           '要先关闭旧版本才能搬过去。你的数据不受影响。',
+           mbError, MB_RETRYCANCEL, IDCANCEL) = IDCANCEL then
+      begin
+        Result := '安装已取消。关闭 WhatPlugin 后重新运行安装程序即可。';
+        exit;
+      end;
   if not WizardIsTaskSelected('vst3') then
     exit;
   while Vst3InUse() do
   begin
     Answer := SuppressibleMsgBox(
-      'DAW 内查询插件 What Plugin Lookup 正在被宿主软件使用（比如开着的 Cubase、Studio One），暂时不能更新。' + #13#10 + #13#10 +
+      'DAW 内查询插件 WhatPluginLookup 正在被宿主软件使用（比如开着的 Cubase、Studio One），暂时不能更新。' + #13#10 + #13#10 +
       '请先保存工程、关闭宿主软件，然后：' + #13#10 +
       '  点“重试”：重新检查，继续安装；' + #13#10 +
       '  点“忽略”：这次不更新查询插件，其余照常安装（查询插件保留旧版本）；' + #13#10 +
