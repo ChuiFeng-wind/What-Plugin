@@ -90,7 +90,8 @@ for (const raw of lines) {
   } else if ((m = line.match(/^!\[(.*)\]\((.+)\)/))) {
     const file = m[2].replace(/\.png$/, '.jpg');
     const [w, h] = dims[file];
-    const maxW = file === 'welcome.jpg' ? 470 : 640;
+    // 对话框截图是竖的，窄一些，免得占满一页。
+    const maxW = { 'welcome.jpg': 470, 'export.jpg': 300 }[file] || 640;
     const dw = Math.min(maxW, w), dh = Math.round(h * dw / w);
     body.push(new Paragraph({
       alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 160, after: 60 },

@@ -57,6 +57,13 @@ public partial class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.Manual;
             Left = -20000;
             Top = -20000;
+            // 截图用：WHATPLUGIN_OFFSCREEN_SIZE=1440x880 指定窗口大小（不能用自动化去改，会把窗口拉回屏幕上）。
+            var size = Environment.GetEnvironmentVariable("WHATPLUGIN_OFFSCREEN_SIZE")?.Split('x');
+            if (size is [var w, var h] && double.TryParse(w, out var width) && double.TryParse(h, out var height))
+            {
+                Width = width;
+                Height = height;
+            }
         }
         WindowEffects.Apply(this);
         StateChanged += (_, _) => UpdateWindowState();
