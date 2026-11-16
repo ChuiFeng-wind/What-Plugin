@@ -18,6 +18,7 @@ string? Option(string name)
 }
 
 var dbPath = Option("--db") ?? PluginDatabase.ResolveDefaultPath();
+HostStock.Current = HostStock.Load(DawLocations.Default);
 
 switch (command)
 {
@@ -125,7 +126,7 @@ switch (command)
             foreach (var plugin in track.Plugins)
             {
                 var row = matcher.Find(plugin.Name);
-                var mark = row == null ? (plugin.Stock || StockPlugins.Contains(host, plugin.Name) ? "自带" : "未装") : row.Kind == PluginKind.Instrument ? "音源" : "已装";
+                var mark = row == null ? (plugin.Stock || StockPlugins.Contains(host, plugin.Name, plugin.Uid) ? "自带" : "未装") : row.Kind == PluginKind.Instrument ? "音源" : "已装";
                 Console.WriteLine($"   [{mark}] {plugin.Name}");
             }
         }

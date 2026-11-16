@@ -109,7 +109,11 @@ public sealed partial class PluginNameMatcher
     private static partial Regex DotArchitecture();
 }
 
-/// <summary>宿主自带的插件。它们不在常规插件目录里，不算缺失。</summary>
+/// <summary>
+/// 宿主自带的插件。它们不在常规插件目录里，不算缺失。
+/// 主要靠 <see cref="HostStock"/> 读本机宿主自己的清单（随宿主升级自动更新）；
+/// 下面的名单只在本机没有那个宿主的清单时兜底，比如看别人发来的工程。
+/// </summary>
 public static class StockPlugins
 {
     private static readonly HashSet<string> Cubase = Build(
@@ -141,8 +145,15 @@ public static class StockPlugins
 
     private static readonly HashSet<string> Empty = [];
 
-    public static bool Contains(ProjectHost host, string name) =>
-        LookupExport.IsOwnPlugin(name) || (host == ProjectHost.Cubase ? Cubase : Empty).Contains(Normalizer.Name(PluginNameMatcher.CleanName(name)));
+    public static bool Contains(ProjectHost host, string name, string? uid = null, HostStock? stock = null) =>
+        LookupExport.IsOwnPlugin(name)
+        || (stock ?? HostStock.Current).Contains(host, name, uid)
+        || (host == ProjectHost.Cubase ? Cubase : Empty).Contains(Normalizer.Name(PluginNameMatcher.CleanName(name)));
+
+    /// <summary>混音笔记不知道是哪个宿主：自带它的宿主名，不是自带的返回 null。</summary>
+    public static string? ProductOf(string name, string? uid = null, HostStock? stock = null) =>
+        (stock ?? HostStock.Current).ProductOf(name, uid)
+        ?? (Cubase.Contains(Normalizer.Name(PluginNameMatcher.CleanName(name))) ? "Cubase" : null);
 
     private static HashSet<string> Build(params string[] names) => names.Select(Normalizer.Name).ToHashSet();
 }
@@ -194,7 +205,8 @@ public static partial class ProjectReport
     public static ProjectReportResult Build(
         IEnumerable<ProjectFileRecord> files,
         IReadOnlyCollection<PluginRow> plugins,
-        IReadOnlySet<string>? ignoredNames = null)
+        IReadOnlySet<string>? ignoredNames = null,
+        HostStock? stock = null)
     {
         var matcher = new PluginNameMatcher(plugins);
         var ignored = ignoredNames ?? new HashSet<string>();
@@ -223,7 +235,7 @@ public static partial class ProjectReport
             }
 
             var lines = latest.Plugins
-                .Select(use => ToLine(use, latest.Host, matcher, ignored))
+                .Select(use => ToLine(use, latest.Host, matcher, ignored, stock))
                 .Where(line => line != null)
                 .Select(line => line!)
                 .GroupBy(line => line.Plugin?.Key ?? "?" + Normalizer.Name(PluginNameMatcher.CleanName(line.Name)))
@@ -263,7 +275,7 @@ public static partial class ProjectReport
             usage);
     }
 
-    private static ProjectPluginLine? ToLine(ProjectPluginUse use, ProjectHost host, PluginNameMatcher matcher, IReadOnlySet<string> ignored)
+    private static ProjectPluginLine? ToLine(ProjectPluginUse use, ProjectHost host, PluginNameMatcher matcher, IReadOnlySet<string> ignored, HostStock? stock)
     {
         var plugin = matcher.Find(use.Name);
         if (plugin != null)
@@ -275,7 +287,7 @@ public static partial class ProjectReport
         }
 
         // 自带插件优先于“已卸载”：同名记录可能是别的来源留下的。
-        if (StockPlugins.Contains(host, use.Name))
+        if (StockPlugins.Contains(host, use.Name, use.Uid, stock))
             return new ProjectPluginLine(use.Name, use.Instances, ProjectPluginState.Stock, null);
         // 没装的音源：工程没标记（Ableton）时靠资料库认出来，不进缺失列表。
         if (Classifier.Classify(use.Name, "", "", null).Kind == PluginKind.Instrument)

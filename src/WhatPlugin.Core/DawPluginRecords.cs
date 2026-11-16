@@ -74,7 +74,7 @@ public static class DawPluginRecords
 
     // ---------- REAPER ----------
 
-    private static List<(DateTime, DawPluginRecord)> LoadReaper(string folder)
+    internal static List<(DateTime Written, DawPluginRecord Record)> LoadReaper(string folder)
     {
         var results = new List<(DateTime, DawPluginRecord)>();
         if (!Directory.Exists(folder))

@@ -588,7 +588,7 @@ public static class TrackImport
             var plugin = matcher.Find(use.Name);
             if (plugin?.Kind == PluginKind.Instrument)
                 continue;
-            if (plugin == null && skipStock && (use.Stock || StockPlugins.Contains(host, use.Name)))
+            if (plugin == null && skipStock && (use.Stock || StockPlugins.Contains(host, use.Name, use.Uid)))
                 continue;
             steps.Add(plugin is { IsMissing: false }
                 ? new ChainStep(plugin.Key, plugin.Name)

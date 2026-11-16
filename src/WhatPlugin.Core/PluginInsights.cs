@@ -256,14 +256,15 @@ public static class MixNotes
     }
 }
 
-public enum ChainStepState { Installed, Missing, Blacklisted, Instrument }
+/// <summary>Stock：插件库里没有，但它是宿主自带的（比如 Cubase 的 Frequency），不算没安装。</summary>
+public enum ChainStepState { Installed, Missing, Blacklisted, Instrument, Stock }
 
 public sealed record ResolvedStep(ChainStep Step, ChainStepState State, PluginRow? Plugin);
 
 public static class ChainReport
 {
     /// <summary>先按标识找，找不到再按名称：重新扫描后标识可能变，名称通常不变。</summary>
-    public static IReadOnlyList<ResolvedStep> Resolve(PluginChain chain, IEnumerable<PluginRow> plugins)
+    public static IReadOnlyList<ResolvedStep> Resolve(PluginChain chain, IEnumerable<PluginRow> plugins, HostStock? stock = null)
     {
         var rows = plugins.ToList();
         var byKey = rows.GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.First());
@@ -271,28 +272,28 @@ public static class ChainReport
 
         return chain.Steps.Select(step =>
         {
-            var (state, plugin) = Find(step.PluginKey, step.PluginName, byKey, byName);
+            var (state, plugin) = Find(step.PluginKey, step.PluginName, byKey, byName, stock);
             return new ResolvedStep(step, state, plugin);
         }).ToList();
     }
 
     /// <summary>找一款插件的安装状态，首选和备选都用它。</summary>
-    public static (ChainStepState State, PluginRow? Plugin) Resolve(ChainPick pick, IEnumerable<PluginRow> plugins)
+    public static (ChainStepState State, PluginRow? Plugin) Resolve(ChainPick pick, IEnumerable<PluginRow> plugins, HostStock? stock = null)
     {
         var rows = plugins.ToList();
         var byKey = rows.GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.First());
         var byName = rows.Where(p => !p.IsMissing).GroupBy(p => Normalizer.Name(p.Name)).ToDictionary(g => g.Key, g => g.First());
-        return Find(pick.PluginKey, pick.PluginName, byKey, byName);
+        return Find(pick.PluginKey, pick.PluginName, byKey, byName, stock);
     }
 
-    private static (ChainStepState, PluginRow?) Find(string key, string name, Dictionary<string, PluginRow> byKey, Dictionary<string, PluginRow> byName)
+    private static (ChainStepState, PluginRow?) Find(string key, string name, Dictionary<string, PluginRow> byKey, Dictionary<string, PluginRow> byName, HostStock? stock)
     {
         var plugin = byKey.GetValueOrDefault(key);
         if (plugin is not { IsMissing: false })
             plugin = byName.GetValueOrDefault(Normalizer.Name(name)) ?? plugin;
         // 音源不在这个软件里显示。只有用户把插件改判成音源，或备份带来时才会遇到。
         var state = plugin?.Kind == PluginKind.Instrument ? ChainStepState.Instrument
-            : plugin is null or { IsMissing: true } ? ChainStepState.Missing
+            : plugin is null or { IsMissing: true } ? (StockPlugins.ProductOf(name, stock: stock) != null ? ChainStepState.Stock : ChainStepState.Missing)
             : plugin.User.Hidden ? ChainStepState.Blacklisted
             : ChainStepState.Installed;
         return (state, plugin);

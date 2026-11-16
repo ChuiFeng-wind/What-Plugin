@@ -15,6 +15,8 @@ public partial class App : Application
         // 按需提权时启动自己的这个模式：只处理一次文件请求，不打开界面。
         if (e.Args is [WhatPlugin.Core.FileOpRunner.HelperArgument, var pipe])
             Environment.Exit(WhatPlugin.Core.FileOpRunner.Serve(pipe));
+        // 本机宿主自带哪些插件：读宿主自己的清单（几百 KB 的 XML），工程报告和混音笔记都要用。
+        WhatPlugin.Core.HostStock.Current = WhatPlugin.Core.HostStock.Load(WhatPlugin.Core.DawLocations.Default);
         base.OnStartup(e);
     }
 }

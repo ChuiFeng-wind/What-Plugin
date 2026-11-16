@@ -100,6 +100,7 @@ public static class LookupExport
                     State = s.State switch
                     {
                         ChainStepState.Missing => "未安装",
+                        ChainStepState.Stock => (StockPlugins.ProductOf(s.Step.PluginName) ?? "宿主") + " 自带",
                         ChainStepState.Blacklisted => "在垃圾桶",
                         _ => "",
                     },

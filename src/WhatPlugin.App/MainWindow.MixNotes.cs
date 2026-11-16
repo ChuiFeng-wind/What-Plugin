@@ -1160,6 +1160,8 @@ public sealed class PickViewModel(ChainPick pick, ChainStepState state, PluginRo
     {
         get
         {
+            if (State == ChainStepState.Stock)
+                return (StockPlugins.ProductOf(pick.PluginName) ?? "宿主") + " 自带的插件，不需要另外安装";
             if (plugin == null)
                 return "这款插件已不在扫描结果里";
             var vendor = plugin.Vendor.Length > 0 ? plugin.Vendor : "未知";
@@ -1170,6 +1172,7 @@ public sealed class PickViewModel(ChainPick pick, ChainStepState state, PluginRo
     public string StateText => State switch
     {
         ChainStepState.Missing => "未安装",
+        ChainStepState.Stock => "宿主自带",
         ChainStepState.Blacklisted => "在垃圾桶",
         ChainStepState.Instrument => "音源",
         _ => "",
