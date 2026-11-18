@@ -1,19 +1,25 @@
 WhatPlugin 使用了下列第三方软件。完整授权文本在同一文件夹中。
 
-JUCE Framework
-  Copyright (c) Raw Material Software Limited
-  按 JUCE 9 End User Licence Agreement 使用：https://juce.com/legal/juce-9-licence/
-  第三方依赖清单见 JUCE 源码中的 JUCE.spdx.json。
-
-VST 3 SDK (MIT)
+VST 3 SDK (MIT，文本见 VST3-SDK.txt)
   Copyright (c) Steinberg Media Technologies GmbH
   VST is a trademark of Steinberg Media Technologies GmbH.
   WhatPlugin 与 Steinberg 没有关联。
+  扫描器 WhatPluginScanner 和查询插件 WhatPluginLookup 用到它。
 
-JUCE 内置的组件
-  zlib (Zlib)、libpng (libpng-2.0)、HarfBuzz (MIT-Modern-Variant)、SheenBidi (Apache-2.0)、
-  LunaSVG (MIT)、PlutoVG (MIT)、FLAC (BSD-3-Clause)、libogg 和 libvorbis (BSD-3-Clause)
-  This software is based in part on the work of the Independent JPEG Group.
+VSTGUI (BSD-3-Clause，文本见 VSTGUI.txt)
+  Copyright (c) Steinberg Media Technologies GmbH
+  查询插件 WhatPluginLookup 的界面用到它。
+
+VSTGUI 内置的组件
+  Expat (MIT，文本见 expat.txt)
+    Copyright (c) 1998, 1999, 2000 Thai Open Source Software Center Ltd and Clark Cooper
+  miniz (MIT，文本见 miniz.txt)
+    Copyright 2013-2014 RAD Game Tools and Valve Software
+    Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
+  RapidJSON (MIT，文本见 RapidJSON.txt)
+    Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip
+  stb_textedit (Public Domain / MIT 二选一，此处按 Public Domain 使用)
+    Sean Barrett
 
 .NET Runtime 和 Windows Desktop Runtime (MIT)
   Copyright (c) .NET Foundation and Contributors

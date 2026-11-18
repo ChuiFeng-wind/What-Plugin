@@ -5,22 +5,26 @@
 // 而名称、厂家、分类都可以直接从工厂读到。
 //
 // 每个文件一个进程，模块崩溃或卡死只影响这一次扫描，由调用方负责超时。
+// 只依赖 Windows API、标准库和 VST3 SDK 的接口头文件。
 //
 // 用法: WhatPluginScanner.exe <插件路径> <输出 JSON 路径>
 // 退出码: 0 成功；2 文件里没有插件；3 参数错误；4 写结果失败；5 模块无法加载；6 模块没有工厂
 
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <objbase.h>
+
+#include <algorithm>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
 
 #define INIT_CLASS_IID
 #include "pluginterfaces/base/ipluginbase.h"
 #undef INIT_CLASS_IID
 
-#include <juce_core/juce_core.h>
-
-#pragma comment(lib, "ole32.lib")
+namespace fs = std::filesystem;
 
 namespace
 {
@@ -33,33 +37,133 @@ namespace
         ExitProcess ((UINT) code);
     }
 
-    juce::File resolveBinary (const juce::File& path)
+    /// 文件夹形式的 .vst3（Contents\x86_64-win\名称.vst3）取里面的二进制；找不到同名的就取第一个。
+    fs::path resolveBinary (const fs::path& path)
     {
-        if (! path.isDirectory())
+        std::error_code ec;
+        if (! fs::is_directory (path, ec))
             return path;
 
-        const auto archDir = path.getChildFile ("Contents").getChildFile ("x86_64-win");
-        const auto preferred = archDir.getChildFile (path.getFileName());
-        if (preferred.existsAsFile())
+        const auto archDir = path / L"Contents" / L"x86_64-win";
+        const auto preferred = archDir / path.filename();
+        if (fs::is_regular_file (preferred, ec))
             return preferred;
 
-        const auto found = archDir.findChildFiles (juce::File::findFiles, false, "*.vst3");
-        return found.isEmpty() ? juce::File() : found.getFirst();
+        std::vector<fs::path> found;
+        for (fs::directory_iterator it (archDir, ec), end; ! ec && it != end; it.increment (ec))
+            if (it->is_regular_file (ec) && _wcsicmp (it->path().extension().c_str(), L".vst3") == 0)
+                found.push_back (it->path());
+        std::sort (found.begin(), found.end());
+        return found.empty() ? fs::path() : found.front();
     }
 
-    juce::String fromUtf16 (const Steinberg::char16* text)
+    std::string toUtf8 (const wchar_t* text, int length = -1)
     {
-        return juce::String (juce::CharPointer_UTF16 (reinterpret_cast<const juce::CharPointer_UTF16::CharType*> (text))).trim();
+        const auto size = WideCharToMultiByte (CP_UTF8, 0, text, length, nullptr, 0, nullptr, nullptr);
+        if (size <= 0)
+            return {};
+        std::string result ((size_t) size, '\0');
+        WideCharToMultiByte (CP_UTF8, 0, text, length, result.data(), size, nullptr, nullptr);
+        if (length < 0 && ! result.empty())
+            result.pop_back(); // 去掉结尾的 NUL
+        return result;
     }
 
-    juce::var makeItem (const juce::String& name, const juce::String& vendor, const juce::String& version, const juce::String& category)
+    /// 工厂里的 char8 字段按规范是 UTF-8；个别老插件用的是系统代码页，不是合法 UTF-8 时按代码页转换。
+    std::string fromChar8 (const char* text, size_t capacity)
     {
-        auto* o = new juce::DynamicObject();
-        o->setProperty ("name", name);
-        o->setProperty ("vendor", vendor);
-        o->setProperty ("version", version);
-        o->setProperty ("category", category);
-        return juce::var (o);
+        const auto length = (int) strnlen (text, capacity);
+        if (length == 0)
+            return {};
+        if (MultiByteToWideChar (CP_UTF8, MB_ERR_INVALID_CHARS, text, length, nullptr, 0) > 0)
+            return std::string (text, (size_t) length);
+        const auto size = MultiByteToWideChar (CP_ACP, 0, text, length, nullptr, 0);
+        std::wstring wide ((size_t) size, L'\0');
+        MultiByteToWideChar (CP_ACP, 0, text, length, wide.data(), size);
+        return toUtf8 (wide.c_str(), size);
+    }
+
+    std::string fromUtf16 (const Steinberg::char16* text, size_t capacity)
+    {
+        static_assert (sizeof (Steinberg::char16) == sizeof (wchar_t));
+        const auto* wide = reinterpret_cast<const wchar_t*> (text);
+        return toUtf8 (wide, (int) wcsnlen (wide, capacity));
+    }
+
+    std::string trim (std::string s)
+    {
+        const auto isSpace = [] (unsigned char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f'; };
+        while (! s.empty() && isSpace ((unsigned char) s.back()))
+            s.pop_back();
+        size_t start = 0;
+        while (start < s.size() && isSpace ((unsigned char) s[start]))
+            ++start;
+        return s.substr (start);
+    }
+
+    template <size_t N> std::string field (const char (&text)[N]) { return trim (fromChar8 (text, N)); }
+    template <size_t N> std::string field (const Steinberg::char16 (&text)[N]) { return trim (fromUtf16 (text, N)); }
+
+    void appendJsonString (std::string& out, const std::string& text)
+    {
+        out += '"';
+        for (const unsigned char c : text)
+        {
+            switch (c)
+            {
+                case '"':  out += "\\\""; break;
+                case '\\': out += "\\\\"; break;
+                case '\n': out += "\\n"; break;
+                case '\r': out += "\\r"; break;
+                case '\t': out += "\\t"; break;
+                default:
+                    if (c < 0x20)
+                    {
+                        char buffer[8];
+                        snprintf (buffer, sizeof buffer, "\\u%04x", c);
+                        out += buffer;
+                    }
+                    else
+                    {
+                        out += (char) c; // UTF-8 原样写出
+                    }
+            }
+        }
+        out += '"';
+    }
+
+    struct Item { std::string name, vendor, version, category; };
+
+    std::string toJson (const std::vector<Item>& items)
+    {
+        std::string out = "[\n";
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            const auto& item = items[i];
+            out += "  {\n    \"name\": ";     appendJsonString (out, item.name);
+            out += ",\n    \"vendor\": ";     appendJsonString (out, item.vendor);
+            out += ",\n    \"version\": ";    appendJsonString (out, item.version);
+            out += ",\n    \"category\": ";   appendJsonString (out, item.category);
+            out += i + 1 < items.size() ? "\n  },\n" : "\n  }\n";
+        }
+        out += "]\n";
+        return out;
+    }
+
+    /// 先写临时文件再替换，调用方不会读到写了一半的结果。UTF-8，无 BOM。
+    bool writeFile (const fs::path& target, const std::string& text)
+    {
+        auto temp = target;
+        temp += L".tmp";
+        {
+            std::ofstream file (temp, std::ios::binary | std::ios::trunc);
+            if (! file)
+                return false;
+            file.write (text.data(), (std::streamsize) text.size());
+            if (! file)
+                return false;
+        }
+        return MoveFileExW (temp.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
     }
 }
 
@@ -71,17 +175,18 @@ int wmain (int argc, wchar_t** argv)
     if (argc != 3)
         return 3;
 
-    const juce::File pluginPath { juce::String (argv[1]) };
-    const juce::File outputFile { juce::String (argv[2]) };
+    std::error_code ec;
+    const fs::path pluginPath = fs::absolute (argv[1], ec);
+    const fs::path outputFile = fs::absolute (argv[2], ec);
 
     CoInitializeEx (nullptr, COINIT_APARTMENTTHREADED);
 
     const auto binary = resolveBinary (pluginPath);
-    if (! binary.existsAsFile())
+    if (binary.empty() || ! fs::is_regular_file (binary, ec))
         exitNow (5);
 
     // 让模块能找到放在它旁边的依赖 dll。
-    auto* module = LoadLibraryExW (binary.getFullPathName().toWideCharPointer(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+    auto* module = LoadLibraryExW (binary.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (module == nullptr)
         exitNow (5);
 
@@ -98,56 +203,57 @@ int wmain (int argc, wchar_t** argv)
 
     Steinberg::PFactoryInfo factoryInfo {};
     factory->getFactoryInfo (&factoryInfo);
-    const auto factoryVendor = juce::String (factoryInfo.vendor).trim();
+    const auto factoryVendor = field (factoryInfo.vendor);
 
     Steinberg::IPluginFactory2* factory2 = nullptr;
     Steinberg::IPluginFactory3* factory3 = nullptr;
     factory->queryInterface (Steinberg::IPluginFactory2::iid, reinterpret_cast<void**> (&factory2));
     factory->queryInterface (Steinberg::IPluginFactory3::iid, reinterpret_cast<void**> (&factory3));
 
-    juce::Array<juce::var> items;
-    juce::StringArray seenNames;
+    std::vector<Item> items;
+    std::vector<std::string> seenNames;
 
     const auto count = factory->countClasses();
     for (Steinberg::int32 i = 0; i < count; ++i)
     {
         Steinberg::PClassInfo info {};
         if (factory->getClassInfo (i, &info) != Steinberg::kResultOk
-            || std::strcmp (info.category, audioEffectClass) != 0)
+            || strncmp (info.category, audioEffectClass, sizeof info.category) != 0)
             continue;
 
-        auto name = juce::String (info.name).trim();
-        juce::String vendor, version, category;
+        Item item { field (info.name), {}, {}, {} };
 
         Steinberg::PClassInfo2 info2 {};
         if (factory2 != nullptr && factory2->getClassInfo2 (i, &info2) == Steinberg::kResultOk)
         {
-            vendor = juce::String (info2.vendor).trim();
-            version = juce::String (info2.version).trim();
-            category = juce::String (info2.subCategories).trim();
+            item.vendor = field (info2.vendor);
+            item.version = field (info2.version);
+            item.category = field (info2.subCategories);
         }
 
         // Unicode 版本的名称最准确（中文名、特殊字符）。
         Steinberg::PClassInfoW infoW {};
         if (factory3 != nullptr && factory3->getClassInfoUnicode (i, &infoW) == Steinberg::kResultOk)
         {
-            if (const auto s = fromUtf16 (infoW.name); s.isNotEmpty())   name = s;
-            if (const auto s = fromUtf16 (infoW.vendor); s.isNotEmpty()) vendor = s;
-            if (const auto s = fromUtf16 (infoW.version); s.isNotEmpty()) version = s;
-            if (const auto s = juce::String (infoW.subCategories).trim(); s.isNotEmpty()) category = s;
+            if (auto s = field (infoW.name); ! s.empty())          item.name = s;
+            if (auto s = field (infoW.vendor); ! s.empty())        item.vendor = s;
+            if (auto s = field (infoW.version); ! s.empty())       item.version = s;
+            if (auto s = field (infoW.subCategories); ! s.empty()) item.category = s;
         }
 
-        if (name.isEmpty() || seenNames.contains (name))
+        if (item.name.empty() || std::find (seenNames.begin(), seenNames.end(), item.name) != seenNames.end())
             continue;
-        seenNames.add (name);
+        seenNames.push_back (item.name);
 
-        items.add (makeItem (name, vendor.isNotEmpty() ? vendor : factoryVendor, version, category));
+        if (item.vendor.empty())
+            item.vendor = factoryVendor;
+        items.push_back (std::move (item));
     }
 
-    if (items.isEmpty())
+    if (items.empty())
         exitNow (2);
 
-    if (! outputFile.replaceWithText (juce::JSON::toString (juce::var (items)), false, false, "\n"))
+    if (! writeFile (outputFile, toJson (items)))
         exitNow (4);
 
     exitNow (0);

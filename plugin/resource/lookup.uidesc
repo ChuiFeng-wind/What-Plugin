@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vstgui-ui-description version="1">
+	<template name="view" class="CViewContainer" size="860, 580" minSize="620, 420" maxSize="1600, 1200" background-color="#16181c" autosize="left right top bottom">
+		<view class="CViewContainer" custom-view-name="LookupView" origin="0, 0" size="860, 580" autosize="left right top bottom"/>
+	</template>
+</vstgui-ui-description>

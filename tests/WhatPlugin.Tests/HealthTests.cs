@@ -263,6 +263,31 @@ public sealed class HealthTests
     }
 
     [Fact]
+    public void PublishesLookupThemeOnlyForTheDefaultDatabase()
+    {
+        var root = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "pv-t-" + Guid.NewGuid().ToString("N"))).FullName;
+        try
+        {
+            var db = Path.Combine(root, "plugins.db");
+            var file = Path.Combine(root, LookupExport.ThemeFileName);
+            var theme = ThemePalettes.All.First(p => !p.IsDark);
+
+            LookupExport.PublishTheme(Path.Combine(root, "other", "test.db"), db, theme);
+            Assert.False(System.IO.File.Exists(file)); // 测试数据库不写
+
+            LookupExport.PublishTheme(db, db, theme);
+            using var json = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(file));
+            // 查询插件按这几个键取色，值是 #RRGGBB。
+            foreach (var key in new[] { "Bg1", "Surface", "Input", "Line", "Text", "Muted", "Accent", "AccentSoft", "OnAccent" })
+                Assert.Equal(theme[key], json.RootElement.GetProperty(key).GetString());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CopiesOldDataOnceAndKeepsOriginal()
     {
         var root = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "pv-m-" + Guid.NewGuid().ToString("N"))).FullName;

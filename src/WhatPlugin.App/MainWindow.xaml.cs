@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private static readonly PluginKind[] Kinds = [PluginKind.Effect, PluginKind.Unknown];
 
     private readonly PluginDatabase _database;
+    private readonly string _databasePath;
     private readonly string _scannerPath = Path.Combine(AppContext.BaseDirectory, "WhatPluginScanner.exe");
     private readonly DispatcherTimer _saveTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private readonly Button[] _stars;
@@ -68,6 +69,7 @@ public partial class MainWindow : Window
         WindowEffects.Apply(this);
         StateChanged += (_, _) => UpdateWindowState();
         var databasePath = ResolveDatabasePath();
+        _databasePath = databasePath;
         _database = new PluginDatabase(databasePath);
         LookupExport.PublishCliPath(databasePath, PluginDatabase.DefaultPath, AppContext.BaseDirectory);
         InitializeSettings();

@@ -31,20 +31,30 @@ public static class LookupExport
     /// <summary>查询窗口靠这个文件找到命令行工具。用 --db 试验时不写，免得指向测试版本。</summary>
     public static void PublishCliPath(string databasePath, string defaultDatabasePath, string appFolder)
     {
+        var cli = Path.Combine(appFolder, "WhatPlugin.Cli.exe");
+        if (File.Exists(cli))
+            Publish(databasePath, defaultDatabasePath, "cli-path.txt", cli);
+    }
+
+    /// <summary>查询窗口打开时先读这个文件上色，不用等命令行工具读完数据库，避免先闪一下默认配色。</summary>
+    public static void PublishTheme(string databasePath, string defaultDatabasePath, ThemePalette theme) =>
+        Publish(databasePath, defaultDatabasePath, ThemeFileName, JsonSerializer.Serialize(theme.Colors));
+
+    public const string ThemeFileName = "lookup-theme.json";
+
+    /// <summary>写到查询插件读的文件夹里。用 --db 试验时不写，免得查询窗口指向测试数据。</summary>
+    private static void Publish(string databasePath, string defaultDatabasePath, string fileName, string content)
+    {
         var full = Path.GetFullPath(databasePath);
         if (!full.Equals(Path.GetFullPath(defaultDatabasePath), StringComparison.OrdinalIgnoreCase)
             && !full.Equals(Path.GetFullPath(PluginDatabase.LegacyDefaultPath), StringComparison.OrdinalIgnoreCase))
             return;
         try
         {
-            var cli = Path.Combine(appFolder, "WhatPlugin.Cli.exe");
-            if (File.Exists(cli))
-            {
-                // 查询插件只看新文件夹，暂时用着旧数据库时也写在这里。
-                var folder = Path.GetDirectoryName(Path.GetFullPath(defaultDatabasePath))!;
-                Directory.CreateDirectory(folder);
-                File.WriteAllText(Path.Combine(folder, "cli-path.txt"), cli);
-            }
+            // 查询插件只看新文件夹，暂时用着旧数据库时也写在这里。
+            var folder = Path.GetDirectoryName(Path.GetFullPath(defaultDatabasePath))!;
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, fileName), content);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

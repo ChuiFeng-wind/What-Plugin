@@ -662,7 +662,7 @@ WhatPlugin 靠 DAW 自己的插件记录区分 VST2 的效果器和音源。请�
 
 ## 许可
 
-WhatPlugin 主程序以 GPL-3.0 协议开源，源码见 github.com/ChuiFeng-wind/What-Plugin。成就包不在开源范围内，免费使用，保留所有权利。WhatPluginLookup 基于 JUCE 编写。第三方组件的许可文本在安装目录的 `licenses` 文件夹里。
+WhatPlugin 主程序以 GPL-3.0 协议开源，源码见 github.com/ChuiFeng-wind/What-Plugin。成就包不在开源范围内，免费使用，保留所有权利。WhatPluginLookup 基于 VST3 SDK 和 VSTGUI 编写。第三方组件的许可文本在安装目录的 `licenses` 文件夹里。
 
 VST 是 Steinberg Media Technologies GmbH 的商标。文中提到的其他产品名和厂家名属于各自的所有者，WhatPlugin 与它们没有关联。
 

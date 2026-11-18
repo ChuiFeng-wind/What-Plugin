@@ -154,7 +154,7 @@
 
 ## 从源码构建
 
-需要 .NET 10 SDK；编译 `scanner/` 和 `plugin/` 还需要 CMake 和 Visual Studio C++ 工具链，`plugin/` 另外需要 JUCE；打安装包需要 Inno Setup 6。
+需要 .NET 10 SDK；编译 `scanner/` 和 `plugin/` 还需要 CMake 和 Visual Studio C++ 工具链，另外需要 [VST3 SDK](https://github.com/steinbergmedia/vst3sdk)（含 VSTGUI，`git clone --recurse-submodules`）；打安装包需要 Inno Setup 6。
 
 ```bash
 dotnet build src/WhatPlugin.App/WhatPlugin.App.csproj -c Release -r win-x64
@@ -169,7 +169,7 @@ src/WhatPlugin.Core/          核心逻辑：扫描、数据库（SQLite）、�
 src/WhatPlugin.App/           WPF 图形界面
 src/WhatPlugin.Cli/           命令行工具，也给 DAW 内的查询插件提供数据
 scanner/                      C++ 扫描进程，在独立进程里读取 VST3 清单
-plugin/                       DAW 内查询插件（C++ / JUCE）
+plugin/                       DAW 内查询插件（C++ / VST3 SDK + VSTGUI）
 installer/                    Inno Setup 安装脚本和打包脚本
 tests/                        单元测试
 ```
@@ -178,6 +178,7 @@ tests/                        单元测试
 
 | 版本 | 主要内容 |
 | --- | --- |
+| 1.3.2 | DAW 内的查询插件改用 VST3 SDK + VSTGUI 重写，不再使用 JUCE（插件 ID 不变，工程里已插着的不受影响）；打开时直接用主程序的配色，不再先闪一下深色；修复回车不推荐、双击复制插件名不完整；扫描器同样去掉 JUCE，体积更小 |
 | 1.3.1 | Cubase / Nuendo 自带的插件改为读宿主自己的插件清单来识别，新版 Cubase 新增的自带插件不再被当成缺失；REAPER 的 Cockos 插件同样识别；混音笔记里的自带插件显示“宿主自带”，不再标成未安装 |
 | 1.3.0 | 去掉常用清单（和混音笔记重复）；左侧导航调整顺序并加分隔线；导出、导入改成勾选内容，可以只备份一部分，评价和混音笔记可以合成一个文件分享；混音笔记可以多选批量操作，删除文件夹可同时删除笔记；“购买方式”改叫“获取方式”，标成已购自动进“已购账号”；账号框可以选填过的账号 |
 | 1.2.7 | 改名为 WhatPlugin（去掉空格）：安装目录、查询插件、快捷方式都不再带空格，老版本升级时自动搬家；新增 PDF 用户手册 |
@@ -195,7 +196,7 @@ tests/                        单元测试
 
 成就包（`WhatPlugin.Achievements`）不在本仓库中，也不在 GPL-3.0 范围内。它以编译好的形式包含在带成就的安装包和单独的成就包里，可以免费使用，© 2026 ChuiFeng-wind 保留所有权利。
 
-DAW 内查询插件使用 JUCE 构建，第三方组件的许可见 [installer/THIRD-PARTY-NOTICES.txt](installer/THIRD-PARTY-NOTICES.txt)。
+DAW 内查询插件和扫描器使用 VST3 SDK（MIT）和 VSTGUI（BSD）构建，第三方组件的许可见 [installer/THIRD-PARTY-NOTICES.txt](installer/THIRD-PARTY-NOTICES.txt)。
 
 ---
 

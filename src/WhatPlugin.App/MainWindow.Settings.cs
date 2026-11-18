@@ -46,6 +46,7 @@ public partial class MainWindow
     private void InitializeSettings()
     {
         ThemeManager.Apply(_database.GetSetting(ThemeSetting));
+        PublishLookupTheme();
         ThemeList.ItemsSource = ThemePalettes.All.Select(p => new ThemeOption(p, p.Id == ThemeManager.Current.Id)).ToList();
     }
 
@@ -55,11 +56,16 @@ public partial class MainWindow
             return;
         ThemeManager.Apply(id);
         _database.SetSetting(ThemeSetting, id);
+        PublishLookupTheme();
         // 下面这些颜色是代码取的，不会自动跟着变。
         UpdateStars();
         RefreshProjectReport();
         StatusText.Text = "已切换到“" + ThemeManager.Current.Name + "”主题";
     }
+
+    /// <summary>DAW 里的查询窗口打开时直接用这份配色。</summary>
+    private void PublishLookupTheme() =>
+        LookupExport.PublishTheme(_databasePath, PluginDatabase.DefaultPath, ThemeManager.Current);
 
     private void ShowSettings()
     {
