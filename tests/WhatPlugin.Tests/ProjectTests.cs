@@ -2,6 +2,8 @@ using System.IO.Compression;
 using System.Text;
 using WhatPlugin.Core;
 
+using static WhatPlugin.Tests.TestPaths;
+
 namespace WhatPlugin.Tests;
 
 public sealed class ProjectTests : IDisposable
@@ -421,18 +423,18 @@ public sealed class ProjectTests : IDisposable
     [InlineData(@"D:\p\0107.cpr", "0107")]
     [InlineData(@"D:\p\111.cpr", "111")]
     [InlineData(@"D:\p\young in.cpr", "young in")]
-    public void SongNameRemovesVersionSuffix(string path, string song) => Assert.Equal(song, ProjectReport.SongName(path));
+    public void SongNameRemovesVersionSuffix(string path, string song) => Assert.Equal(song, ProjectReport.SongName(P(path)));
 
     [Fact]
     public void OwnProjectFolderGroupsDifferentFileNames()
     {
         Assert.Equal(
-            ProjectReport.SongKey(@"D:\霁川\霁川 混音.cpr", ownFolder: true),
-            ProjectReport.SongKey(@"D:\霁川\霁川 音量平衡.cpr", ownFolder: true));
+            ProjectReport.SongKey(P(@"D:\霁川\霁川 混音.cpr"), ownFolder: true),
+            ProjectReport.SongKey(P(@"D:\霁川\霁川 音量平衡.cpr"), ownFolder: true));
         Assert.NotEqual(
-            ProjectReport.SongKey(@"D:\杂项\一.cpr"),
-            ProjectReport.SongKey(@"D:\杂项\二.cpr"));
-        Assert.Equal("霁川", ProjectReport.SongDisplayName(@"D:\霁川\混音.cpr", ownFolder: true));
+            ProjectReport.SongKey(P(@"D:\杂项\一.cpr")),
+            ProjectReport.SongKey(P(@"D:\杂项\二.cpr")));
+        Assert.Equal("霁川", ProjectReport.SongDisplayName(P(@"D:\霁川\混音.cpr"), ownFolder: true));
     }
 
     [Fact]
@@ -459,7 +461,7 @@ public sealed class ProjectTests : IDisposable
     public void ReportSeparatesInstalledMissingAndStock()
     {
         var report = ProjectReport.Build(
-            [File1(@"D:\p\歌.cpr", Day1, "API-2500 Stereo", "Not Installed FX", "Compressor", "StudioEQ")],
+            [File1(P(@"D:\p\歌.cpr"), Day1, "API-2500 Stereo", "Not Installed FX", "Compressor", "StudioEQ")],
             [Row("API-2500", "Waves")]);
 
         var project = Assert.Single(report.Projects);
@@ -475,7 +477,7 @@ public sealed class ProjectTests : IDisposable
     [Fact]
     public void InstalledPluginWinsOverStockNameOfSameSpelling()
     {
-        var report = ProjectReport.Build([File1(@"D:\p\歌.cpr", Day1, "Compressor")], [Row("Compressor", "Some Vendor")]);
+        var report = ProjectReport.Build([File1(P(@"D:\p\歌.cpr"), Day1, "Compressor")], [Row("Compressor", "Some Vendor")]);
 
         Assert.Equal(ProjectPluginState.Installed, report.Projects[0].Plugins[0].State);
         Assert.True(report.Usage.ContainsKey(Normalizer.Name("Compressor")));
@@ -484,7 +486,7 @@ public sealed class ProjectTests : IDisposable
     [Fact]
     public void StockListDoesNotApplyToOtherHosts()
     {
-        var report = ProjectReport.Build([File1(@"D:\p\歌.rpp", Day1, "StudioEQ")], []);
+        var report = ProjectReport.Build([File1(P(@"D:\p\歌.rpp"), Day1, "StudioEQ")], []);
 
         Assert.Equal(ProjectPluginState.Missing, report.Projects[0].Plugins[0].State);
     }
@@ -493,7 +495,7 @@ public sealed class ProjectTests : IDisposable
     public void InstrumentsNeverAppearInReport()
     {
         var report = ProjectReport.Build(
-            [File1(@"D:\p\歌.als", Day1, "Installed Synth", "Omnisphere", "Real FX")],
+            [File1(P(@"D:\p\歌.als"), Day1, "Installed Synth", "Omnisphere", "Real FX")],
             [Row("Installed Synth", kind: PluginKind.Instrument), Row("Real FX")]);
 
         var line = Assert.Single(report.Projects[0].Plugins);
@@ -505,7 +507,7 @@ public sealed class ProjectTests : IDisposable
     [Fact]
     public void UninstalledPluginCountsAsMissing()
     {
-        var report = ProjectReport.Build([File1(@"D:\p\歌.cpr", Day1, "Old FX")], [Row("Old FX", missing: true)]);
+        var report = ProjectReport.Build([File1(P(@"D:\p\歌.cpr"), Day1, "Old FX")], [Row("Old FX", missing: true)]);
 
         Assert.Equal(1, report.Projects[0].MissingCount);
         Assert.Equal("Old FX", Assert.Single(report.Missing).Name);
@@ -516,7 +518,7 @@ public sealed class ProjectTests : IDisposable
     {
         // 老版本用过的插件在新版本里换掉了，这首歌现在打开不缺它。
         var report = ProjectReport.Build(
-            [File1(@"D:\p\歌-01.cpr", Day1, "Old FX"), File1(@"D:\p\歌-02.cpr", Day2, "New FX")],
+            [File1(P(@"D:\p\歌-01.cpr"), Day1, "Old FX"), File1(P(@"D:\p\歌-02.cpr"), Day2, "New FX")],
             [Row("New FX")]);
 
         var project = Assert.Single(report.Projects);
@@ -532,9 +534,9 @@ public sealed class ProjectTests : IDisposable
         var plugin = Row("Pro-R");
         var report = ProjectReport.Build(
             [
-                File1(@"D:\p\歌-01.cpr", Day2, "Pro-R"),
-                File1(@"D:\p\歌-02.cpr", Day1, "Pro-R"),
-                File1(@"D:\p\另一首.cpr", Day1, "Pro-R"),
+                File1(P(@"D:\p\歌-01.cpr"), Day2, "Pro-R"),
+                File1(P(@"D:\p\歌-02.cpr"), Day1, "Pro-R"),
+                File1(P(@"D:\p\另一首.cpr"), Day1, "Pro-R"),
             ],
             [plugin]);
 
@@ -549,7 +551,7 @@ public sealed class ProjectTests : IDisposable
     {
         var plugin = Row("Pro-R");
         var report = ProjectReport.Build(
-            [File1(@"D:\p\歌-01.cpr", Day1, "Pro-R"), File1(@"D:\p\歌-02.cpr", Day2, "Other")],
+            [File1(P(@"D:\p\歌-01.cpr"), Day1, "Pro-R"), File1(P(@"D:\p\歌-02.cpr"), Day2, "Other")],
             [plugin]);
 
         Assert.Equal(Day1, report.Usage[plugin.Key].LastUsedUtc);
@@ -559,7 +561,7 @@ public sealed class ProjectTests : IDisposable
     public void IgnoredNameLeavesMissingList()
     {
         var ignored = new HashSet<string> { ProjectReport.IgnoreKey("Custom Thing Stereo") };
-        var report = ProjectReport.Build([File1(@"D:\p\歌.cpr", Day1, "Custom Thing Stereo")], [], ignored);
+        var report = ProjectReport.Build([File1(P(@"D:\p\歌.cpr"), Day1, "Custom Thing Stereo")], [], ignored);
 
         Assert.Equal(0, report.Projects[0].MissingCount);
         Assert.Equal(ProjectPluginState.Ignored, report.Projects[0].Plugins[0].State);
@@ -570,7 +572,7 @@ public sealed class ProjectTests : IDisposable
     public void MissingSummaryMergesChannelVariants()
     {
         var report = ProjectReport.Build(
-            [File1(@"D:\p\一.cpr", Day1, "Gone FX Stereo"), File1(@"D:\p\二.cpr", Day2, "Gone FX Mono")],
+            [File1(P(@"D:\p\一.cpr"), Day1, "Gone FX Stereo"), File1(P(@"D:\p\二.cpr"), Day2, "Gone FX Mono")],
             []);
 
         var missing = Assert.Single(report.Missing);
@@ -580,7 +582,7 @@ public sealed class ProjectTests : IDisposable
     [Fact]
     public void FailedProjectIsReportedAndKeepsItsError()
     {
-        var failed = new ProjectFileRecord(0, @"D:\p\坏.cpr", ProjectHost.Cubase, 1, Day1, ProjectScanStatus.Failed, "坏文件", ProjectParser.Version, []);
+        var failed = new ProjectFileRecord(0, P(@"D:\p\坏.cpr"), ProjectHost.Cubase, 1, Day1, ProjectScanStatus.Failed, "坏文件", ProjectParser.Version, []);
 
         var project = Assert.Single(ProjectReport.Build([failed], []).Projects);
 

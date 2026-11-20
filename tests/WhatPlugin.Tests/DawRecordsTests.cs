@@ -48,7 +48,7 @@ public sealed class DawRecordsTests : IDisposable
         Assert.Equal("Odd, Name (Some", odd.Info.Name.Split(" (Co")[0]);
     }
 
-    [Fact]
+    [WindowsFact] // 样例是 Windows 版宿主写的文件，Mac 版要用真机样例另写
     public void Reaper_MatchesByFileNameWithSpacesAsUnderscores()
     {
         Directory.CreateDirectory(Path.Combine(_root, "REAPER"));
@@ -60,7 +60,7 @@ public sealed class DawRecordsTests : IDisposable
         Assert.Null(index.Find(@"E:\vst\Broken.dll"));
     }
 
-    [Fact]
+    [WindowsFact] // 样例是 Windows 版宿主写的文件，Mac 版要用真机样例另写
     public void FlStudio_TypeKeyWinsOverFolder_AndPathOrNameMatch()
     {
         var withType = DawPluginRecords.ParseFlStudio("ps_name=Serum\r\nps_file_vendorname_0=Xfer Records\r\nps_file_type_0=2\r\nps_file_filename_0=C:\\VST\\Serum_x64.dll\r\n", instrumentByFolder: false);
@@ -107,7 +107,7 @@ public sealed class DawRecordsTests : IDisposable
         Assert.Equal(["Cakewalk"], index.DawsUsing(@"c:\vst"));
     }
 
-    [Fact]
+    [WindowsFact] // 样例是 Windows 版宿主写的文件，Mac 版要用真机样例另写
     public void StudioOne_OnlyElementsWithPathAndExplicitCategory()
     {
         const string xml = """
@@ -144,7 +144,7 @@ public sealed class DawRecordsTests : IDisposable
         Assert.True(HostPluginCache.LoadAll(Locations()).Count > 0);
     }
 
-    [Fact]
+    [WindowsFact] // 样例是 Windows 版宿主写的文件，Mac 版要用真机样例另写
     public void NewestRecordWins_WhenDawsDisagree()
     {
         var cubase = Path.Combine(_root, "Steinberg", "Cubase 14_64");

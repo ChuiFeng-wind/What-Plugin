@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json;
 using WhatPlugin.Core;
 
+using static WhatPlugin.Tests.TestPaths;
+
 namespace WhatPlugin.Tests;
 
 public sealed class HealthTests
@@ -23,16 +25,16 @@ public sealed class HealthTests
     public void FindsEachKindOfProblem()
     {
         var report = PluginHealth.Build([
-            Row("Healthy", [File(@"C:\a\Healthy.vst3")]),
+            Row("Healthy", [File(P(@"C:\a\Healthy.vst3"))]),
             Row("Gone", [], missing: true),
-            Row("Crash", [File(@"C:\a\Crash.vst3", status: ScanStatus.LoadFailed, error: "缺少依赖")]),
-            Row("Slow", [File(@"C:\a\Slow.vst3", status: ScanStatus.TimedOut)]),
-            Row("Old32", [File(@"C:\x86\Old32.dll", PluginFormat.Vst2, Arch.X86)]),
-            Row("Both32", [File(@"C:\a\Both32.vst3"), File(@"C:\x86\Both32.vst3", arch: Arch.X86)]),
-            Row("V2", [File(@"F:\v\V2.dll", PluginFormat.Vst2, status: ScanStatus.FileInfoOnly)]),
-            Row("Twin", [File(@"C:\a\Twin.vst3"), File(@"D:\b\Twin.vst3")]),
-            Row("Both", [File(@"C:\a\Both.vst3"), File(@"F:\v\Both.dll", PluginFormat.Vst2, status: ScanStatus.FileInfoOnly)]),
-            Row("Stale", [File(@"C:\a\Stale.vst3", version: "2.0.0"), File(@"F:\v\Stale.dll", PluginFormat.Vst2, version: "1.5.0", status: ScanStatus.FileInfoOnly)]),
+            Row("Crash", [File(P(@"C:\a\Crash.vst3"), status: ScanStatus.LoadFailed, error: "缺少依赖")]),
+            Row("Slow", [File(P(@"C:\a\Slow.vst3"), status: ScanStatus.TimedOut)]),
+            Row("Old32", [File(P(@"C:\x86\Old32.dll"), PluginFormat.Vst2, Arch.X86)]),
+            Row("Both32", [File(P(@"C:\a\Both32.vst3")), File(P(@"C:\x86\Both32.vst3"), arch: Arch.X86)]),
+            Row("V2", [File(P(@"F:\v\V2.dll"), PluginFormat.Vst2, status: ScanStatus.FileInfoOnly)]),
+            Row("Twin", [File(P(@"C:\a\Twin.vst3")), File(P(@"D:\b\Twin.vst3"))]),
+            Row("Both", [File(P(@"C:\a\Both.vst3")), File(P(@"F:\v\Both.dll"), PluginFormat.Vst2, status: ScanStatus.FileInfoOnly)]),
+            Row("Stale", [File(P(@"C:\a\Stale.vst3"), version: "2.0.0"), File(P(@"F:\v\Stale.dll"), PluginFormat.Vst2, version: "1.5.0", status: ScanStatus.FileInfoOnly)]),
         ], []);
 
         Assert.Empty(Kinds(report, "Healthy"));
@@ -52,8 +54,8 @@ public sealed class HealthTests
     public void MonoVariantAndDifferentArchAreNotDuplicates()
     {
         var report = PluginHealth.Build([
-            Row("Micro", [File(@"F:\v\Micro.dll", PluginFormat.Vst2, status: ScanStatus.FileInfoOnly), File(@"F:\v\Micro (Mono).dll", PluginFormat.Vst2, status: ScanStatus.FileInfoOnly)]),
-            Row("Arch", [File(@"C:\Program Files\Arch.vst3"), File(@"C:\Program Files (x86)\Arch.vst3", arch: Arch.X86)]),
+            Row("Micro", [File(P(@"F:\v\Micro.dll"), PluginFormat.Vst2, status: ScanStatus.FileInfoOnly), File(P(@"F:\v\Micro (Mono).dll"), PluginFormat.Vst2, status: ScanStatus.FileInfoOnly)]),
+            Row("Arch", [File(P(@"C:\Program Files\Arch.vst3")), File(P(@"C:\Program Files (x86)\Arch.vst3"), arch: Arch.X86)]),
         ], []);
         Assert.DoesNotContain(report.Issues, i => i.Kind == HealthKind.Duplicate);
     }
@@ -71,9 +73,9 @@ public sealed class HealthTests
     public void SkipsInstrumentsAndBlacklistedPlugins()
     {
         var report = PluginHealth.Build([
-            Row("Synth", [File(@"C:\x86\Synth.dll", arch: Arch.X86)], kind: PluginKind.Instrument),
-            Row("Banned", [File(@"C:\x86\Banned.dll", arch: Arch.X86)], hidden: true),
-        ], [new HostBlacklistEntry(@"C:\x86\Synth.dll", "Cubase 14")]);
+            Row("Synth", [File(P(@"C:\x86\Synth.dll"), arch: Arch.X86)], kind: PluginKind.Instrument),
+            Row("Banned", [File(P(@"C:\x86\Banned.dll"), arch: Arch.X86)], hidden: true),
+        ], [new HostBlacklistEntry(P(@"C:\x86\Synth.dll"), "Cubase 14")]);
         Assert.Empty(report.Issues);
         // 音源文件只算数量，不会出现名字。
         Assert.Equal(1, report.UnmatchedBlacklistFiles);
@@ -83,9 +85,9 @@ public sealed class HealthTests
     public void MatchesHostBlacklistByPathAndSaysWhetherAnotherFormatWorks()
     {
         var report = PluginHealth.Build([
-            Row("Saved", [File(@"F:\V\Saved.dll", PluginFormat.Vst2, status: ScanStatus.FileInfoOnly), File(@"C:\a\Saved.vst3")]),
-            Row("Stuck", [File(@"F:\v\Stuck.dll", PluginFormat.Vst2, status: ScanStatus.FileInfoOnly)]),
-        ], [new HostBlacklistEntry(@"f:\v\saved.dll", "Cubase 14"), new HostBlacklistEntry(@"F:\v\Stuck.dll", "Cubase 14"), new HostBlacklistEntry(@"F:\v\Stuck.dll", "Cubase 13")]);
+            Row("Saved", [File(P(@"F:\V\Saved.dll"), PluginFormat.Vst2, status: ScanStatus.FileInfoOnly), File(P(@"C:\a\Saved.vst3"))]),
+            Row("Stuck", [File(P(@"F:\v\Stuck.dll"), PluginFormat.Vst2, status: ScanStatus.FileInfoOnly)]),
+        ], [new HostBlacklistEntry(P(@"f:\v\saved.dll"), "Cubase 14"), new HostBlacklistEntry(P(@"F:\v\Stuck.dll"), "Cubase 14"), new HostBlacklistEntry(P(@"F:\v\Stuck.dll"), "Cubase 13")]);
 
         var saved = report.Issues.Single(i => i.Plugin.Name == "Saved" && i.Kind == HealthKind.HostBlacklisted);
         Assert.Contains("VST3 可用", saved.Detail);
@@ -95,7 +97,7 @@ public sealed class HealthTests
         Assert.Equal(2, report.NeedsAttention);
     }
 
-    [Fact]
+    [WindowsFact] // 样例是 Windows 版宿主写的文件，Mac 版要用真机样例另写
     public void ParsesCubaseVst2BlacklistStructure()
     {
         // 结构取自 Cubase 14 的真实文件。FileType 里的 Name 不能被当成文件名。
@@ -124,7 +126,7 @@ public sealed class HealthTests
         Assert.Equal([@"C:\a\Bad.vst3", @"D:\b\Worse.VST3"], HostBlacklist.ParseVst3(new MemoryStream(Encoding.UTF8.GetBytes(xml))));
     }
 
-    [Fact]
+    [WindowsFact] // 样例是 Windows 版宿主写的文件，Mac 版要用真机样例另写
     public void LoadReadsHostFoldersAndIgnoresDamagedFiles()
     {
         var root = Path.Combine(Path.GetTempPath(), "pv-h-" + Guid.NewGuid().ToString("N"));
@@ -147,13 +149,13 @@ public sealed class HealthTests
     [Fact]
     public void UpdateGuideGroupsVendorsAndSkipsInstruments()
     {
-        var waves = Row("A", [File(@"C:\a.vst3")]) with { AutoVendor = "Waves" };
+        var waves = Row("A", [File(P(@"C:\a.vst3"))]) with { AutoVendor = "Waves" };
         var rows = new[]
         {
             waves,
-            Row("B", [File(@"C:\b.vst3")]) with { AutoVendor = "Waves" },
-            Row("C", [File(@"C:\c.vst3")]) with { AutoVendor = "Tiny Co" },
-            Row("Synth", [File(@"C:\s.vst3")], kind: PluginKind.Instrument) with { AutoVendor = "SynthCo" },
+            Row("B", [File(P(@"C:\b.vst3"))]) with { AutoVendor = "Waves" },
+            Row("C", [File(P(@"C:\c.vst3"))]) with { AutoVendor = "Tiny Co" },
+            Row("Synth", [File(P(@"C:\s.vst3"))], kind: PluginKind.Instrument) with { AutoVendor = "SynthCo" },
         };
         var updates = UpdateGuide.Build(rows);
         Assert.Equal(["Waves", "Tiny Co"], updates.Select(u => u.Vendor));
@@ -248,7 +250,7 @@ public sealed class HealthTests
             LookupExport.PublishCliPath(db, db, app);
             Assert.False(System.IO.File.Exists(pointer)); // 工具不存在时不写
 
-            var cli = Path.Combine(app, "WhatPlugin.Cli.exe");
+            var cli = Path.Combine(app, AppPlatform.Executable("WhatPlugin.Cli"));
             System.IO.File.WriteAllText(cli, "");
             LookupExport.PublishCliPath(Path.Combine(root, "test.db"), db, app);
             Assert.False(System.IO.File.Exists(pointer)); // 测试数据库不写
@@ -334,7 +336,7 @@ public sealed class HealthTests
         }
     }
 
-    [Fact]
+    [WindowsFact] // 测的是 DPAPI
     public void SecretsSavedBeforeTheRenameStillDecrypt()
     {
         // 用改名前的熵值加密，模拟老数据库里的密码。
@@ -346,11 +348,11 @@ public sealed class HealthTests
     [Fact]
     public void RecognisesOwnPlugin()
     {
-        Assert.True(LookupExport.IsOwnPlugin(@"C:\VST3\WhatPluginLookup.vst3"));
+        Assert.True(LookupExport.IsOwnPlugin(P(@"C:\VST3\WhatPluginLookup.vst3")));
         Assert.True(LookupExport.IsOwnPlugin("whatpluginlookup"));
-        Assert.True(LookupExport.IsOwnPlugin(@"C:\VST3\What Plugin Lookup.vst3"));
+        Assert.True(LookupExport.IsOwnPlugin(P(@"C:\VST3\What Plugin Lookup.vst3")));
         Assert.True(LookupExport.IsOwnPlugin("what plugin lookup"));
-        Assert.True(LookupExport.IsOwnPlugin(@"C:\VST3\PluginVault Lookup.vst3"));
-        Assert.False(LookupExport.IsOwnPlugin(@"C:\VST3\Pro-Q 3.vst3"));
+        Assert.True(LookupExport.IsOwnPlugin(P(@"C:\VST3\PluginVault Lookup.vst3")));
+        Assert.False(LookupExport.IsOwnPlugin(P(@"C:\VST3\Pro-Q 3.vst3")));
     }
 }

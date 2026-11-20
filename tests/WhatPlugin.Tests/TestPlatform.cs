@@ -24,6 +24,21 @@ public sealed class WindowsTheoryAttribute : TheoryAttribute
     }
 }
 
+/// <summary>
+/// 测试里的样例路径按 Windows 写（D:\工程\歌.cpr）。纯逻辑的测试用 P() 换成当前系统的写法：
+/// Windows 上原样不变，Mac 上变成 /D/工程/歌.cpr。解析 Windows 版宿主文件的测试不用它，那些只在 Windows 上跑。
+/// </summary>
+public static class TestPaths
+{
+    public static string P(string windowsPath)
+    {
+        if (OperatingSystem.IsWindows())
+            return windowsPath;
+        var path = windowsPath.Replace('\\', '/');
+        return path.Length >= 2 && path[1] == ':' ? "/" + path[0] + path[2..] : path;
+    }
+}
+
 internal static class TestPlatform
 {
     /// <summary>

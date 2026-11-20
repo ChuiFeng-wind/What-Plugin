@@ -3,6 +3,8 @@ using Microsoft.Data.Sqlite;
 using WhatPlugin.Core;
 using Xunit;
 
+using static WhatPlugin.Tests.TestPaths;
+
 namespace WhatPlugin.Tests;
 
 public class HostPluginCacheTests
@@ -119,22 +121,22 @@ public class HostPluginCacheTests
     {
         var folders = HostPluginCache.TopFolders(
         [
-            @"F:\vst64\A.dll",
-            @"F:\VST64\Sub\B.dll",
-            @"F:\vst64\Sub\Deep\C.dll",
-            @"F:\vst642\D.dll",
-            @"E:\Lonely\E.dll",
+            P(@"F:\vst64\A.dll"),
+            P(@"F:\VST64\Sub\B.dll"),
+            P(@"F:\vst64\Sub\Deep\C.dll"),
+            P(@"F:\vst642\D.dll"),
+            P(@"E:\Lonely\E.dll"),
         ], minimumPlugins: 1);
-        Assert.Equal([@"E:\Lonely", @"F:\vst64", @"F:\vst642"], folders);
+        Assert.Equal([P(@"E:\Lonely"), P(@"F:\vst64"), P(@"F:\vst642")], folders);
     }
 
     [Fact]
     public void InsideDoesNotMatchSimilarPrefix()
     {
-        Assert.True(HostPluginCache.IsInside(@"F:\vst64\a.dll", @"F:\VST64"));
-        Assert.True(HostPluginCache.IsInside(@"F:\vst64\a.dll", @"F:\vst64\"));
-        Assert.False(HostPluginCache.IsInside(@"F:\vst642\a.dll", @"F:\vst64"));
-        Assert.False(HostPluginCache.IsInside(@"F:\vst64", @"F:\vst64"));
+        Assert.True(HostPluginCache.IsInside(P(@"F:\vst64\a.dll"), P(@"F:\VST64")));
+        Assert.True(HostPluginCache.IsInside(P(@"F:\vst64\a.dll"), P(@"F:\vst64\")));
+        Assert.False(HostPluginCache.IsInside(P(@"F:\vst642\a.dll"), P(@"F:\vst64")));
+        Assert.False(HostPluginCache.IsInside(P(@"F:\vst64"), P(@"F:\vst64")));
     }
 
     [Fact]
@@ -256,19 +258,19 @@ public class SettingsStorageTests : IDisposable
         var path = Path.Combine(_folder, "test.db");
         using (var database = new PluginDatabase(path))
         {
-            database.AddVst2Folder(@"F:\vst64\");
-            database.AddVst2Folder(@"f:\VST64");
-            database.AddVst2Folder(@"E:\More");
+            database.AddVst2Folder(P(@"F:\vst64\"));
+            database.AddVst2Folder(P(@"f:\VST64"));
+            database.AddVst2Folder(P(@"E:\More"));
             database.SetSetting("theme", "paper");
             database.SetSetting("theme", "mist");
         }
         using (var database = new PluginDatabase(path))
         {
-            Assert.Equal([@"E:\More", @"F:\vst64"], database.LoadVst2Folders());
+            Assert.Equal([P(@"E:\More"), P(@"F:\vst64")], database.LoadVst2Folders());
             Assert.Equal("mist", database.GetSetting("theme"));
             Assert.Null(database.GetSetting("nothing"));
-            database.RemoveVst2Folder(@"F:\vst64");
-            Assert.Equal([@"E:\More"], database.LoadVst2Folders());
+            database.RemoveVst2Folder(P(@"F:\vst64"));
+            Assert.Equal([P(@"E:\More")], database.LoadVst2Folders());
         }
     }
 
@@ -277,7 +279,7 @@ public class SettingsStorageTests : IDisposable
     {
         using var database = new PluginDatabase(Path.Combine(_folder, "test.db"));
         database.SaveMerged(PluginMerger.Merge(new[] { "Plain", "Noted", "Listed", "Blocked", "Reasoned", "Present" }.Select(name => new FileScanResult(
-            @"F:\vst64\" + name + ".dll", PluginFormat.Vst2, Arch.X64, 1, DateTime.UnixEpoch, ScanStatus.FileInfoOnly, null,
+            P(@"F:\vst64\") + name + ".dll", PluginFormat.Vst2, Arch.X64, 1, DateTime.UnixEpoch, ScanStatus.FileInfoOnly, null,
             [new PluginClassInfo(name, "", "", "", false, InfoSource.ModuleInfo)]))));
         var rows = database.LoadPlugins().ToDictionary(p => p.Name);
         database.SaveUserData(rows["Noted"].Id, rows["Noted"].User with { Note = "好用" });
@@ -301,7 +303,7 @@ public class SettingsStorageTests : IDisposable
     {
         var path = Path.Combine(_folder, "old.db");
         using (var database = new PluginDatabase(path))
-            database.AddProjectFolder(@"D:\Work");
+            database.AddProjectFolder(P(@"D:\Work"));
         using (var connection = new SqliteConnection("Data Source=" + path))
         {
             connection.Open();
@@ -312,7 +314,7 @@ public class SettingsStorageTests : IDisposable
         SqliteConnection.ClearAllPools();
         using (var database = new PluginDatabase(path))
         {
-            Assert.Equal([@"D:\Work"], database.LoadProjectFolders());
+            Assert.Equal([P(@"D:\Work")], database.LoadProjectFolders());
             Assert.Empty(database.LoadVst2Folders());
             database.SetSetting("theme", "forest");
             Assert.Equal("forest", database.GetSetting("theme"));
