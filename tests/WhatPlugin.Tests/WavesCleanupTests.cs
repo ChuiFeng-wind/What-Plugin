@@ -183,10 +183,10 @@ public sealed class WavesCleanupTests : IDisposable
 
     // ---------- 识别 ----------
 
-    [Fact]
+    [WindowsFact]
     public void SquishedCodeMatchesTheRealMsiRecord() => Assert.Equal(Squished, WavesIdentity.SquishedCode(Code));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("Waves 14", "WavesAudio", true)]
     [InlineData("Waves Complete", "Waves Inc.", true)]
     [InlineData("Waves Factory", "Waves Factory Ltd", false)]
@@ -196,7 +196,7 @@ public sealed class WavesCleanupTests : IDisposable
     public void MainProductNeedsBothNameAndPublisher(string name, string publisher, bool expected) =>
         Assert.Equal(expected, WavesIdentity.IsMainProduct(new InstalledProgram("k", name, publisher, "", "x", "", false)));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("WaveShell1-VST3 14.5_x64.vst3", true)]
     [InlineData("WaveShell1-AAX 14.5.aaxplugin", true)]
     [InlineData("WaveShell1-WPAPI_2 14.5.bundle", true)]
@@ -205,7 +205,7 @@ public sealed class WavesCleanupTests : IDisposable
     [InlineData("WaveShell.txt", false)]
     public void WaveShellNameRule(string name, bool expected) => Assert.Equal(expected, WavesIdentity.IsWaveShellName(name));
 
-    [Fact]
+    [WindowsFact]
     public void SurveySortsEveryKnownLocationIntoItsCategory()
     {
         BuildInstall();
@@ -226,7 +226,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Equal(4, survey.Targets.Count(t => t.Category == WavesCategory.WaveShell));
     }
 
-    [Fact]
+    [WindowsFact]
     public void VisibleAndHiddenMsiEntriesBecomeOneProductWithAnUninstallFallback()
     {
         BuildInstall();
@@ -239,7 +239,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Null(survey.Central?.MsiCode);
     }
 
-    [Fact]
+    [WindowsFact]
     public void LookalikesAreNeverTargets()
     {
         BuildInstall();
@@ -258,7 +258,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.DoesNotContain(survey.MainRoots, r => r.StartsWith(_paths.SearchRoots[1]));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ExtraShellsAreFoundOutsideStandardFoldersAndBundlesStayWhole()
     {
         BuildInstall();
@@ -273,7 +273,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Equal(2, extras.Count);
     }
 
-    [Fact]
+    [WindowsFact]
     public void DawAndCentralBlockButBackgroundServicesOnlyWarn()
     {
         var cubase = WavesSurveyor.Scan(Env("Cubase14"));
@@ -284,7 +284,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Equal(["WavesLocalServer"], server.RunningBackground);
     }
 
-    [Fact]
+    [WindowsFact]
     public void UninstallEntryWithoutProgramOrMsiIsStaleAndOnlyThenRemovable()
     {
         var stale = "Waves 13 13.0";
@@ -301,7 +301,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.NotNull(WavesRegistryGuard.Reject(UninstallRoot + other, null, [], _paths, _registry));
     }
 
-    [Fact]
+    [WindowsFact]
     public void TestEnvironmentNeverAcceptsAMainFolderOutsideItsRoot()
     {
         var outside = Path.Combine(Path.GetTempPath(), "WavesOutside" + Guid.NewGuid().ToString("N"));
@@ -322,7 +322,7 @@ public sealed class WavesCleanupTests : IDisposable
 
     // ---------- 白名单 ----------
 
-    [Fact]
+    [WindowsFact]
     public void GuardRefusesAnythingOutsideWavesLocations()
     {
         BuildInstall();
@@ -342,7 +342,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.NotNull(WavesGuard.Reject(Path.Combine(Main, "..", "Other", "file.dll"), roots, _paths));
     }
 
-    [Fact]
+    [WindowsFact]
     public void MainRootMustBeCalledWaves()
     {
         var folder = Path.Combine(_paths.SearchRoots[0], "NotWaves");
@@ -352,7 +352,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.NotNull(WavesGuard.Reject(file, [folder], _paths));
     }
 
-    [Fact]
+    [WindowsFact]
     public void GuardRefusesLinks()
     {
         var real = Path.Combine(_root, "Elsewhere");
@@ -375,7 +375,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Equal("路径里有链接", WavesGuard.Reject(link, [Main], _paths));
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"HKLM\SOFTWARE\WOW6432Node", "不在允许的注册表位置")]
     [InlineData(@"HKLM\SOFTWARE", "不在允许的注册表位置")]
     [InlineData(@"HKLM\SOFTWARE\Classes\Installer\Products\EB08701BD416D9E46A77277C091FE47C", "不处理 Windows Installer 记录")]
@@ -385,7 +385,7 @@ public sealed class WavesCleanupTests : IDisposable
     public void RegistryGuardRefusesEverythingNotListed(string key, string reason) =>
         Assert.Equal(reason, WavesRegistryGuard.Reject(key, null, [Main], _paths, _registry));
 
-    [Fact]
+    [WindowsFact]
     public void RegistryGuardChecksOwnershipOfGuidKeysAndLzma()
     {
         BuildInstall();
@@ -396,7 +396,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.NotNull(WavesRegistryGuard.Reject(@"HKLM\SOFTWARE\Caphyon", null, [Main], _paths, _registry));
     }
 
-    [Fact]
+    [WindowsFact]
     public void TraceValuesMustPointIntoWavesFolders()
     {
         var key = WavesRegistryGuard.TraceValueKeys[0];
@@ -407,7 +407,7 @@ public sealed class WavesCleanupTests : IDisposable
 
     // ---------- 备份 ----------
 
-    [Fact]
+    [WindowsFact]
     public void BackupRestoresDeletedFilesAndEmptyFoldersAndMarksDone()
     {
         BuildInstall();
@@ -427,7 +427,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Empty(WavesBackup.FindUnrestored(Path.Combine(_root, "Backup")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void CorruptBackupIsReportedAndStaysUnrestored()
     {
         BuildInstall();
@@ -441,7 +441,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Single(WavesBackup.FindUnrestored(Path.Combine(_root, "Backup")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void RestoreRefusesManifestPathsOutsideWavesLocations()
     {
         var folder = Path.Combine(_root, "Backup", "x");
@@ -459,7 +459,7 @@ public sealed class WavesCleanupTests : IDisposable
 
     // ---------- 主流程 ----------
 
-    [Fact]
+    [WindowsFact]
     public async Task StandardCleanKeepsWhatMsiDeletedAndCleansTheRest()
     {
         BuildInstall();
@@ -488,7 +488,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Contains("已经查不到了", result.Report);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task FullCleanRemovesEverythingListed()
     {
         BuildInstall();
@@ -512,7 +512,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Equal([@"F:\TestDeepseek\NCM\artifacts\waves-shell-test\app.exe"], traces);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task KeptCategoriesAreIndividuallyRespected()
     {
         BuildInstall();
@@ -527,7 +527,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_paths.RoamingAppData, "Waves Audio")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task RegistryIsExportedBeforeItIsDeleted()
     {
         BuildInstall();
@@ -538,7 +538,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Contains(exports, f => File.ReadAllText(f) == @"HKLM\SOFTWARE\WavesAudio");
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task IfMsiStaysRegisteredNothingIsCleanedAndNothingKeptIsLost()
     {
         BuildInstall();
@@ -556,7 +556,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Contains("修复工具", result.Report);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task RetryUsesMsiexecUninstallThenContinues()
     {
         BuildInstall();
@@ -579,7 +579,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Equal($"MsiExec.exe /X{Code}", _launched[1]);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task StoppingAtTheUninstallerLeavesFilesAlone()
     {
         BuildInstall();
@@ -595,7 +595,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.True(Directory.Exists(Path.Combine(Main, "Plug-Ins V14")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task SkippedCentralKeepsItsFilesAndRegistry()
     {
         BuildInstall();
@@ -616,7 +616,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.True(_registry.KeyExists(@"HKCU\Software\Classes\waves-central"));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ExtrasOnlyMoveWhenTicked()
     {
         BuildInstall();
@@ -631,7 +631,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.True(File.Exists(unticked));
     }
 
-    [Fact]
+    [WindowsFact]
     public void LockedCategoriesCannotBeLeftOut()
     {
         var set = WavesRun.Normalize([WavesCategory.Licenses]);
@@ -640,7 +640,7 @@ public sealed class WavesCleanupTests : IDisposable
         Assert.Contains(WavesCategory.Installer, set);
     }
 
-    [Fact]
+    [WindowsFact]
     public void DescribeListsPathsAndWhatIsNeverTouched()
     {
         BuildInstall();

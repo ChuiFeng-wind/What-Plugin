@@ -232,7 +232,7 @@ public static class HostPluginCache
 
     private static IEnumerable<string> CacheFiles(string? steinbergFolder)
     {
-        var root = steinbergFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steinberg");
+        var root = steinbergFolder ?? AppPlatform.SteinbergFolder;
         if (!Directory.Exists(root))
             return [];
         try

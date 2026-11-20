@@ -17,12 +17,11 @@ public sealed record DawLocations(
 {
     public static DawLocations Default { get; } = new();
 
-    private static string AppData => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-    private static string Documents => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+    private static string Documents => AppPlatform.Documents;
 
-    public string Steinberg => SteinbergFolder ?? System.IO.Path.Combine(AppData, "Steinberg");
-    public string Reaper => ReaperFolder ?? System.IO.Path.Combine(AppData, "REAPER");
-    public string PreSonus => PreSonusFolder ?? System.IO.Path.Combine(AppData, "PreSonus");
+    public string Steinberg => SteinbergFolder ?? AppPlatform.SteinbergFolder;
+    public string Reaper => ReaperFolder ?? AppPlatform.ReaperFolder;
+    public string PreSonus => PreSonusFolder ?? AppPlatform.PreSonusFolder;
 
     /// <summary>FL Studio 20 以后放在“文档\Image-Line\FL Studio”，较新的版本在“文档\Image-Line\Data\FL Studio”。</summary>
     public IReadOnlyList<string> FlStudio => FlStudioDatabases ??
@@ -31,7 +30,9 @@ public sealed record DawLocations(
         System.IO.Path.Combine(Documents, "Image-Line", "Data", "FL Studio", "Presets", "Plugin database"),
     ];
 
-    public IEnumerable<CakewalkEntry> Cakewalk() => (CakewalkInventory ?? CakewalkRegistry.Read)();
+    /// <summary>Cakewalk 只有 Windows 版，清单在注册表里。</summary>
+    public IEnumerable<CakewalkEntry> Cakewalk() =>
+        CakewalkInventory != null ? CakewalkInventory() : OperatingSystem.IsWindows() ? CakewalkRegistry.Read() : [];
 }
 
 /// <summary>Cakewalk 清单里的一项：子键名（插件路径）和它下面的值。</summary>
@@ -312,6 +313,7 @@ public static class DawPluginRecords
 }
 
 /// <summary>只读打开 Cakewalk 的 VST 清单。不同版本的产品名（Cakewalk、SONAR…）都看。</summary>
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class CakewalkRegistry
 {
     private const string Root = @"Software\Cakewalk Music Software";

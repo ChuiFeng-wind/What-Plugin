@@ -45,6 +45,21 @@ public sealed class WishlistTests : IDisposable
         Assert.Equal(899m, item.PaidPrice);
     }
 
+    /// <summary>加密改成按平台的接口后，以前版本存下的密码（直接用 DPAPI 和固定 entropy 加密）必须照常能解开。</summary>
+    [WindowsFact]
+    public void PasswordsSavedByEarlierVersionsStillDecrypt()
+    {
+        var old = System.Security.Cryptography.ProtectedData.Protect(Encoding.UTF8.GetBytes(FakePassword),
+            Encoding.UTF8.GetBytes("PluginVault.secret.v1"), System.Security.Cryptography.DataProtectionScope.CurrentUser);
+        Assert.Equal(FakePassword, SecretProtector.TryUnprotect(old));
+
+        // 反过来也一样：新版本加密的，用以前的方式也能解开（降级安装时不丢密码）。
+        var current = SecretProtector.Protect(FakePassword);
+        var plain = System.Security.Cryptography.ProtectedData.Unprotect(current,
+            Encoding.UTF8.GetBytes("PluginVault.secret.v1"), System.Security.Cryptography.DataProtectionScope.CurrentUser);
+        Assert.Equal(FakePassword, Encoding.UTF8.GetString(plain));
+    }
+
     [Fact]
     public void PasswordIsNotStoredInPlainText()
     {

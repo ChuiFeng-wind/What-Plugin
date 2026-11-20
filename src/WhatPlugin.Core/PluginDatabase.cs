@@ -27,10 +27,10 @@ public sealed partial class PluginDatabase : IDisposable
     }
 
     public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WhatPlugin", "plugins.db");
+        AppPlatform.LocalDataRoot, "WhatPlugin", "plugins.db");
 
     public static string LegacyDefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PluginVault", "plugins.db");
+        AppPlatform.LocalDataRoot, "PluginVault", "plugins.db");
 
     /// <summary>
     /// 软件改名后，把旧文件夹里的数据库复制到新位置。只在新位置还没有数据库时做一次。

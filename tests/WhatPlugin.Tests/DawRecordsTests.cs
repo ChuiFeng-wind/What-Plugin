@@ -84,7 +84,7 @@ public sealed class DawRecordsTests : IDisposable
         Assert.Equal("Instrument", index.Find(@"D:\VST\Dexed.dll")?.Category);
     }
 
-    [Fact]
+    [WindowsFact] // Cakewalk 只有 Windows 版，清单里是 Windows 路径
     public void Cakewalk_NeedsPathAndSynthFlag()
     {
         var synth = DawPluginRecords.ParseCakewalk(new CakewalkEntry("c:/program files/vstplugins/dexed.dll",

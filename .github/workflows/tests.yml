@@ -1,0 +1,28 @@
+# 在 Windows 和 Mac 上各跑一遍单元测试，确认核心库在两个系统上都能用。
+# 只在公开仓库里自动运行（公开仓库的 GitHub Actions 免费）；私有仓库里只能手动触发。
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.repository == 'ChuiFeng-wind/What-Plugin' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      # Windows 上测 Windows 版和跨平台版两份；Mac 上只有跨平台版，Windows 专用的测试会显示为跳过。
+      - run: dotnet test tests/WhatPlugin.Tests --nologo

@@ -20,6 +20,7 @@ public sealed record InstalledProgram(
     string InstallLocation,
     bool IsMsi);
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class InstalledPrograms
 {
     private const string UninstallKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
@@ -372,6 +373,7 @@ public static class RemovalGuard
 public sealed record RecycledEntry(string OriginalPath, DateTime DeletedUtc, string RecycledPath, string InfoPath);
 
 /// <summary>Windows 回收站。送入用系统接口；恢复时读 $I 记录找到对应的 $R 文件。</summary>
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class RecycleBin
 {
     private const uint FoDelete = 3;
@@ -494,6 +496,7 @@ public sealed record FileOpRequest(FileOpKind Kind, IReadOnlyList<string> Paths,
 public sealed record FileOpResult(string Path, bool Ok, string? Error = null, bool AccessDenied = false, bool Unconfirmed = false);
 
 /// <summary>实际移动文件。普通权限和提权后走的都是这里，每个路径都重新过白名单。</summary>
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class FileOpExecutor
 {
     private const int ErrorAccessDenied = 5, ErrorSharingViolation = 32, DeAccessDeniedSource = 0x78, ErrorCancelled = 1223;
@@ -579,6 +582,7 @@ public static class FileOpExecutor
 }
 
 /// <summary>按需提权：不需要管理员权限的文件直接处理，其余的才弹一次 UAC。</summary>
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public static class FileOpRunner
 {
     public const string HelperArgument = "--file-helper";

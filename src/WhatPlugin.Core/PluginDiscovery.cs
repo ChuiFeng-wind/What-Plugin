@@ -1,5 +1,3 @@
-using Microsoft.Win32;
-
 namespace WhatPlugin.Core;
 
 /// <summary>在插件目录中查找待扫描对象。只读取文件信息，不加载任何插件。</summary>
@@ -12,34 +10,10 @@ public static class PluginDiscovery
             .DistinctBy(r => Path.TrimEndingDirectorySeparator(r.Item1), StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+    /// <summary>当前平台的默认插件目录，见 <see cref="AppPlatform.DefaultPluginRoots"/>。</summary>
     public static IReadOnlyList<(string Path, PluginFormat Format)> DefaultRoots()
     {
-        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        var common = Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles);
-        var commonX86 = Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFilesX86);
-
-        var roots = new List<(string, PluginFormat)>
-        {
-            (Path.Combine(common, "VST3"), PluginFormat.Vst3),
-            (Path.Combine(commonX86, "VST3"), PluginFormat.Vst3),
-            (Path.Combine(common, "CLAP"), PluginFormat.Clap),
-            (Path.Combine(common, "Avid", "Audio", "Plug-Ins"), PluginFormat.Aax),
-            (Path.Combine(common, "VST2"), PluginFormat.Vst2),
-            (Path.Combine(programFiles, "VSTPlugins"), PluginFormat.Vst2),
-            (Path.Combine(programFiles, "Steinberg", "VSTPlugins"), PluginFormat.Vst2),
-            (Path.Combine(programFilesX86, "VSTPlugins"), PluginFormat.Vst2),
-            (Path.Combine(programFilesX86, "Steinberg", "VstPlugins"), PluginFormat.Vst2),
-        };
-
-        foreach (var keyName in new[] { @"SOFTWARE\VST", @"SOFTWARE\WOW6432Node\VST" })
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(keyName);
-            if (key?.GetValue("VSTPluginsPath") is string registered && registered.Length > 0)
-                roots.Add((registered, PluginFormat.Vst2));
-        }
-
-        return roots
+        return AppPlatform.DefaultPluginRoots()
             .DistinctBy(r => Path.TrimEndingDirectorySeparator(r.Item1), StringComparer.OrdinalIgnoreCase)
             .ToList();
     }

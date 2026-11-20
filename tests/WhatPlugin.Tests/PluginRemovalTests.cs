@@ -41,7 +41,7 @@ public sealed class PluginRemovalTests : IDisposable
 
     // ---------- 卸载程序匹配 ----------
 
-    [Fact]
+    [WindowsFact]
     public void PluginUnderInstallLocationIsExact()
     {
         var row = Row("Foo", "Acme", File1(@"D:\Apps\FooSuite\Foo.dll"));
@@ -49,7 +49,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal("Foo Suite", match.Exact?.Name);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ProgramNameCanStandInForPublisherUnderInstallLocation()
     {
         var row = Row("wdm2vst", "O Deus Audio", File1(@"D:\Apps\Tools\wdm2vst.dll"));
@@ -57,7 +57,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal("O Deus WDM2VST v1.1", match.Exact?.Name);
     }
 
-    [Fact]
+    [WindowsFact]
     public void AnotherVendorsProgramRegisteredOnASharedFolderIsNeverOffered()
     {
         // 真实电脑上的情况：SoundToys 把用户的公共 VST 文件夹登记成了自己的安装目录。
@@ -67,7 +67,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Empty(match.Possible);
     }
 
-    [Fact]
+    [WindowsFact]
     public void SharedFolderProgramStillMatchesItsOwnPlugin()
     {
         var row = Row("EchoBoy", "SoundToys", File1(@"F:\vst64\EchoBoy.dll"));
@@ -75,7 +75,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal("SoundToys 5", match.Exact?.Name);
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"D:\")]
     [InlineData(@"C:\Program Files")]
     [InlineData(@"C:\Program Files\Common Files")]
@@ -87,7 +87,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Null(UninstallMatcher.Find(row, [Program("Something", "Other", location)]).Exact);
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("Ample Guitar M", "Ample Guitar M 3.5.2", "Ample Sound")]
     [InlineData("Ample Guitar M", "Ample Sound Ample Guitar M", "Nobody")]
     [InlineData("Foo Comp", "Foo Comp version 1.2.0 (x64)", "Ample Sound Inc.")]
@@ -98,14 +98,14 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal(program, UninstallMatcher.Find(row, [Program(program, publisher)]).Exact?.Name);
     }
 
-    [Fact]
+    [WindowsFact]
     public void SameNameFromAnotherPublisherIsNotExact()
     {
         var row = Row("Comp", "Acme");
         Assert.Null(UninstallMatcher.Find(row, [Program("Comp", "Zeta Systems")]).Exact);
     }
 
-    [Fact]
+    [WindowsFact]
     public void VendorOnlyIsPossibleNeverExact()
     {
         var row = Row("Pro-Q 4", "FabFilter");
@@ -114,7 +114,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal("FabFilter Total Bundle", Assert.Single(match.Possible).Name);
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("\"C:\\A B\\unins000.exe\" /S", "C:\\A B\\unins000.exe", "/S")]
     [InlineData("C:\\A B\\uninstall.exe /x /y", "C:\\A B\\uninstall.exe", "/x /y")]
     [InlineData("MsiExec.exe /X{B10780BE}", "MsiExec.exe", "/X{B10780BE}")]
@@ -129,7 +129,7 @@ public sealed class PluginRemovalTests : IDisposable
 
     // ---------- 方案 ----------
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("Waves", "C4", true)]
     [InlineData("Waves Audio", "C4", true)]
     [InlineData("Acme", "WaveShell1-VST3 14.5", true)]
@@ -141,7 +141,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal(expected, RemovalPlanner.IsWaves(row));
     }
 
-    [Fact]
+    [WindowsFact]
     public void PlanSkipsFilesSharedWithUnselectedPlugins()
     {
         var a = Row("A", "Acme", File1(@"D:\x\Shell.dll"), File1(@"D:\x\A.dll"));
@@ -156,7 +156,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal(2, both[0].Files.Count);
     }
 
-    [Fact]
+    [WindowsFact]
     public void PlanIgnoresMissingFilesAndListsBundleMates()
     {
         var a = Row("Alpha", "Acme", File1(@"D:\Suite\Alpha.dll"), File1(@"D:\Suite\gone.dll"));
@@ -173,7 +173,7 @@ public sealed class PluginRemovalTests : IDisposable
 
     // ---------- 删除格式 ----------
 
-    [Fact]
+    [WindowsFact]
     public void FormatRemovalKeepsLastUsableVersion()
     {
         var vst3 = File1(@"D:\x\A.vst3", PluginFormat.Vst3, ScanStatus.Loaded);
@@ -187,7 +187,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Contains("还没有选择", RemovalPlanner.CheckFormatRemoval(row, [], [row], _ => true));
     }
 
-    [Fact]
+    [WindowsFact]
     public void FailedVersionDoesNotCountAsUsable()
     {
         var bad = File1(@"D:\x\A.vst3", PluginFormat.Vst3, ScanStatus.LoadFailed);
@@ -198,7 +198,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Null(RemovalPlanner.CheckFormatRemoval(row, [bad.Path], [row], _ => true));
     }
 
-    [Fact]
+    [WindowsFact]
     public void FormatRemovalRefusesWavesSharedAndForeignFiles()
     {
         var waves = Row("C4", "Waves", File1(@"D:\x\WaveShell.dll"), File1(@"D:\x\WaveShell.vst3", PluginFormat.Vst3));
@@ -212,14 +212,14 @@ public sealed class PluginRemovalTests : IDisposable
 
     // ---------- 白名单 ----------
 
-    [Fact]
+    [WindowsFact]
     public void GuardAcceptsPluginInsideRoot()
     {
         var dll = Touch(@"root\Sub\Foo.dll");
         Assert.Null(RemovalGuard.Reject(dll, [Path.Combine(_dir, "root")]));
     }
 
-    [Fact]
+    [WindowsFact]
     public void GuardRejectsEverythingElse()
     {
         var root = Path.Combine(_dir, "root");
@@ -241,7 +241,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.NotNull(RemovalGuard.Reject(system, [Path.GetPathRoot(system)!]));
     }
 
-    [Fact]
+    [WindowsFact]
     public void GuardRejectsPathsThroughJunctions()
     {
         var target = Path.Combine(_dir, "target");
@@ -295,7 +295,7 @@ public sealed class PluginRemovalTests : IDisposable
         return bin;
     }
 
-    [Fact]
+    [WindowsFact]
     public void FindsLatestRecordInBothFormats()
     {
         var path = @"D:\x\Foo.dll";
@@ -311,7 +311,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Null(RecycleBin.Find(@"D:\x\None.dll", bin));
     }
 
-    [Fact]
+    [WindowsFact]
     public void BrokenInfoFilesAreIgnored()
     {
         var bin = FakeBin(@"D:\x\Foo.dll", "AAA.dll", DateTime.UtcNow);
@@ -321,7 +321,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.NotNull(RecycleBin.Find(@"D:\x\Foo.dll", bin));
     }
 
-    [Fact]
+    [WindowsFact]
     public void RestorePutsFileBackAndRefusesToOverwrite()
     {
         var root = Path.Combine(_dir, "root");
@@ -344,7 +344,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal("回收站里已经没有这个文件", Assert.Single(FileOpExecutor.Execute(request, bin)).Error);
     }
 
-    [Fact]
+    [WindowsFact]
     public void RestoreRefusesPathsOutsideRoots()
     {
         var bin = FakeBin(@"C:\Windows\evil.dll", "AAA.dll", DateTime.UtcNow);
@@ -355,7 +355,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.True(File.Exists(Path.Combine(bin, "$RAAA.dll")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void RealRecycleBinRoundTrip()
     {
         var root = Path.Combine(_dir, "root");
@@ -373,7 +373,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Equal("假插件", File.ReadAllText(dll));
     }
 
-    [Fact]
+    [WindowsFact]
     public void RecycleRejectsWithoutTouchingFile()
     {
         var text = Touch(@"root\notes.txt");
@@ -386,7 +386,7 @@ public sealed class PluginRemovalTests : IDisposable
 
     // ---------- 管道和提权判断 ----------
 
-    [Fact]
+    [WindowsFact]
     public async Task HelperAppliesGuardToRequestsFromPipe()
     {
         var outside = Touch(@"other\Foo.dll");
@@ -402,13 +402,13 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.True(File.Exists(outside));
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("other-pipe")]
     [InlineData(@"WhatPlugin-..\..\x")]
     [InlineData("")]
     public void HelperRefusesForeignPipeNames(string name) => Assert.Equal(2, FileOpRunner.Serve(name));
 
-    [Fact]
+    [WindowsFact]
     public void ElevationOnlyForProtectedFolders()
     {
         var common = Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles);
@@ -423,7 +423,7 @@ public sealed class PluginRemovalTests : IDisposable
             new Classification(PluginKind.Effect, ["EQ"], ClassificationSource.SdkCategory),
             [new MergedFile(path, PluginFormat.Vst2, Arch.X64, "1", "", ScanStatus.FileInfoOnly, null)]);
 
-    [Fact]
+    [WindowsFact]
     public void RemovedFilesAreRemembered()
     {
         using var db = new PluginDatabase(Path.Combine(_dir, "t.db"));
@@ -439,7 +439,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Empty(db.LoadRemovedFiles());
     }
 
-    [Fact]
+    [WindowsFact]
     public void ForgetUninstalledKeepsVerdictsInTrashAndDropsEmptyRows()
     {
         using var db = new PluginDatabase(Path.Combine(_dir, "t.db"));
@@ -481,7 +481,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.True(returned.User.Hidden);
     }
 
-    [Fact]
+    [WindowsFact]
     public void TrashMemoryFindsUninstalledByNameButNotWhileInstalled()
     {
         var gone = Row("Pro-R 2", "FabFilter") with { IsMissing = true, User = PluginUserData.Empty with { Hidden = true, BlacklistReason = "不好用" } };
@@ -496,7 +496,7 @@ public sealed class PluginRemovalTests : IDisposable
         Assert.Null(TrashMemory.Find(" ", [gone]));
     }
 
-    [Fact]
+    [WindowsFact]
     public void MigratesFromSchemaNine()
     {
         var path = Path.Combine(_dir, "t.db");

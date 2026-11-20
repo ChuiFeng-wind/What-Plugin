@@ -157,7 +157,7 @@ public static class HostBlacklist
 {
     public static List<HostBlacklistEntry> Load(string? steinbergFolder = null)
     {
-        var root = steinbergFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steinberg");
+        var root = steinbergFolder ?? AppPlatform.SteinbergFolder;
         var results = new List<HostBlacklistEntry>();
         if (!Directory.Exists(root))
             return results;

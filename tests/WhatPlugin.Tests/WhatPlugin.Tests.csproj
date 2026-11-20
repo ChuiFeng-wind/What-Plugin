@@ -1,10 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- 编两份：Windows 版测全部（含成就和界面相关的）；跨平台版证明核心库不靠 Windows 也能用，Mac 上跑的就是它。 -->
+    <TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net10.0-windows;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- 测试里调用 Windows 专用功能的地方都用 WindowsFact 标了，在其他系统上会跳过。 -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
@@ -13,13 +17,15 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
-    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
     <ProjectReference Include="..\..\src\WhatPlugin.Core\WhatPlugin.Core.csproj" />
   </ItemGroup>
-  <!-- 成就包不在公开仓库里：没有它的源码时，跳过引用和它的测试。 -->
+  <!-- 成就包用了 WPF，只在 Windows 版里测；它也不在公开仓库里，没有源码时跳过。 -->
   <PropertyGroup>
-    <HasAchievements Condition="Exists('..\..\src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj')">true</HasAchievements>
+    <HasAchievements Condition="Exists('..\..\src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj') And '$(TargetFramework)' == 'net10.0-windows'">true</HasAchievements>
   </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
+  </ItemGroup>
   <ItemGroup Condition="'$(HasAchievements)' == 'true'">
     <ProjectReference Include="..\..\src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj" />
   </ItemGroup>

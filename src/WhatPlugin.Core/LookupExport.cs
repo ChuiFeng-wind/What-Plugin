@@ -31,7 +31,7 @@ public static class LookupExport
     /// <summary>查询窗口靠这个文件找到命令行工具。用 --db 试验时不写，免得指向测试版本。</summary>
     public static void PublishCliPath(string databasePath, string defaultDatabasePath, string appFolder)
     {
-        var cli = Path.Combine(appFolder, "WhatPlugin.Cli.exe");
+        var cli = Path.Combine(appFolder, AppPlatform.Executable("WhatPlugin.Cli"));
         if (File.Exists(cli))
             Publish(databasePath, defaultDatabasePath, "cli-path.txt", cli);
     }

@@ -94,23 +94,23 @@ public sealed record UpsertResult(int Added, int Updated, IReadOnlyList<string>?
 public sealed record LoginAssignment(IReadOnlyList<string> NewPlatforms, int Shared, int Own);
 
 /// <summary>
-/// 用 Windows 数据保护（DPAPI）加密，密钥绑定当前 Windows 账号，所以不需要另设主密码；
+/// 用系统自带的、绑定当前用户的保护加密，所以不需要另设主密码：Windows 是 DPAPI（见 <see cref="WindowsSecretBackend"/>）。
 /// 换账号或重装系统后无法解开，迁移要靠“导出账号”。
 /// </summary>
 public static class SecretProtector
 {
-    // 这个值和已保存的密码绑定，软件改名后也不能改，否则以前的账号密码都解不开。
-    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("PluginVault.secret.v1");
+    /// <summary>当前平台的加密方式。测试可以换成别的。</summary>
+    public static ISecretBackend Backend { get; set; } =
+        OperatingSystem.IsWindows() ? new WindowsSecretBackend() : new UnsupportedSecretBackend();
 
-    public static byte[] Protect(string secret) =>
-        ProtectedData.Protect(Encoding.UTF8.GetBytes(secret), Entropy, DataProtectionScope.CurrentUser);
+    public static byte[] Protect(string secret) => Backend.Protect(Encoding.UTF8.GetBytes(secret));
 
     /// <summary>解不开时返回 null，例如数据库来自另一个 Windows 账号。</summary>
     public static string? TryUnprotect(byte[] protectedBytes)
     {
         try
         {
-            return Encoding.UTF8.GetString(ProtectedData.Unprotect(protectedBytes, Entropy, DataProtectionScope.CurrentUser));
+            return Encoding.UTF8.GetString(Backend.Unprotect(protectedBytes));
         }
         catch (CryptographicException)
         {

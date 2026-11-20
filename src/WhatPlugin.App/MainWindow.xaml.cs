@@ -32,7 +32,7 @@ public partial class MainWindow : Window
 
     private readonly PluginDatabase _database;
     private readonly string _databasePath;
-    private readonly string _scannerPath = Path.Combine(AppContext.BaseDirectory, "WhatPluginScanner.exe");
+    private readonly string _scannerPath = Path.Combine(AppContext.BaseDirectory, AppPlatform.Executable("WhatPluginScanner"));
     private readonly DispatcherTimer _saveTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private readonly Button[] _stars;
 

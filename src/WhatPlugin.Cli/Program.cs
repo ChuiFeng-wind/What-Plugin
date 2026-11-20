@@ -54,7 +54,7 @@ switch (command)
     }
     case "scan":
     {
-        var scannerPath = Path.Combine(AppContext.BaseDirectory, "WhatPluginScanner.exe");
+        var scannerPath = Path.Combine(AppContext.BaseDirectory, AppPlatform.Executable("WhatPluginScanner"));
         if (!File.Exists(scannerPath))
         {
             Console.Error.WriteLine("找不到扫描器: " + scannerPath);

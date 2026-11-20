@@ -131,6 +131,7 @@ public interface IWavesRegistry
     void Delete(string key, string? value);
 }
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class WindowsWavesRegistry : IWavesRegistry
 {
     private static RegistryKey? Open(string key, bool write = false)
@@ -478,6 +479,7 @@ public sealed class WavesEnvironment
     public required string BackupRoot { get; init; }
     public bool IsTest { get; init; }
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static WavesEnvironment Real()
     {
         var paths = WavesPaths.Current();
@@ -495,6 +497,7 @@ public sealed class WavesEnvironment
     }
 
     /// <summary>假目录环境。卸载项和注册表来自测试文件夹里的 JSON，不会读写真实的 Waves。</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static WavesEnvironment ForTest(string root)
     {
         var paths = WavesPaths.UnderTestRoot(root);
