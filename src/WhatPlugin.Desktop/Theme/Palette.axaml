@@ -1,0 +1,28 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 默认配色（石墨琥珀）。运行时 ThemeManager 按 Core 里的 ThemePalettes 整套替换，键名一样。 -->
+    <SolidColorBrush x:Key="Bg0" Color="#101012"/>
+    <SolidColorBrush x:Key="Bg1" Color="#16161A"/>
+    <SolidColorBrush x:Key="Surface" Color="#1D1D22"/>
+    <SolidColorBrush x:Key="SurfaceHover" Color="#25252B"/>
+    <SolidColorBrush x:Key="SurfaceActive" Color="#2E2E35"/>
+    <SolidColorBrush x:Key="Input" Color="#121215"/>
+    <SolidColorBrush x:Key="Line" Color="#2A2A31"/>
+    <SolidColorBrush x:Key="LineStrong" Color="#3C3C45"/>
+    <SolidColorBrush x:Key="Text" Color="#EFEDE8"/>
+    <SolidColorBrush x:Key="TextDim" Color="#B4B2AD"/>
+    <SolidColorBrush x:Key="Muted" Color="#8D8B90"/>
+    <SolidColorBrush x:Key="Accent" Color="#F0A93B"/>
+    <SolidColorBrush x:Key="AccentHover" Color="#F7BC5E"/>
+    <SolidColorBrush x:Key="AccentPressed" Color="#D9952E"/>
+    <SolidColorBrush x:Key="OnAccent" Color="#1C1408"/>
+    <SolidColorBrush x:Key="AccentSoft" Color="#2B2316"/>
+    <SolidColorBrush x:Key="AccentSoftHover" Color="#332918"/>
+    <SolidColorBrush x:Key="Danger" Color="#EE7770"/>
+    <SolidColorBrush x:Key="DangerSoft" Color="#33191A"/>
+    <SolidColorBrush x:Key="Good" Color="#7BCB9B"/>
+    <SolidColorBrush x:Key="GoodSoft" Color="#17291F"/>
+
+    <!-- 字体：Windows 用 Segoe UI 和微软雅黑，Mac 用苹方。列表里本机没有的会自动跳过。 -->
+    <FontFamily x:Key="UiFont">Segoe UI, Microsoft YaHei UI, PingFang SC, Hiragino Sans GB, Helvetica Neue</FontFamily>
+</ResourceDictionary>

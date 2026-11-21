@@ -1,0 +1,234 @@
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Material.Icons;
+using Material.Icons.Avalonia;
+using WhatPlugin.Core;
+
+namespace WhatPlugin.Desktop;
+
+/// <summary>主窗口：左侧导航加右侧页面。各页面在后续阶段从 Windows 版逐个移植过来。</summary>
+public partial class MainWindow : Window
+{
+    /// <summary>一个导航项。Key 和 Windows 版一致，保存的导航顺序两边通用。</summary>
+    public sealed record NavDefinition(string Key, string Label, MaterialIconKind Icon, string Subtitle, int Stage);
+
+    /// <summary>默认顺序，和 Windows 版的左侧导航一样。“健康检查”上面有一条分隔线。</summary>
+    public static readonly IReadOnlyList<NavDefinition> Pages =
+    [
+        new("Plugins", "插件库", MaterialIconKind.Bookshelf, "按功能、厂家和格式整理已安装的插件", 2),
+        new("Blacklist", "垃圾桶", MaterialIconKind.DeleteOutline, "不想在插件库里看到的插件。文件不会被移动或卸载", 2),
+        new("Chains", "混音笔记", MaterialIconKind.LinkVariant, "按混音师、乐器分文件夹，记下每条轨道用了哪些插件、什么顺序、为什么这么用。这里只是记录，不会写入 DAW", 5),
+        new("Accounts", "已购账号", MaterialIconKind.KeyOutline, "买过的插件和厂家账号，密码加密保存在本机", 5),
+        new("Wishes", "心愿单", MaterialIconKind.HeartOutline, "想买的插件和打折提醒", 5),
+        new("Health", "健康检查", MaterialIconKind.HeartPulse, "扫描失败、重复安装和 DAW 屏蔽的插件", 3),
+        new("Idle", "闲置报告", MaterialIconKind.ClockOutline, "已安装但长期没进工程的效果器，只统计已扫描的工程", 4),
+        new("Projects", "工程", MaterialIconKind.FolderOutline, "支持 Cubase、Nuendo、Studio One、REAPER、Ableton Live。只读取工程文件，不修改工程，也不加载插件", 4),
+    ];
+
+    public static readonly NavDefinition SettingsPage =
+        new("Settings", "设置", MaterialIconKind.CogOutline, "外观和插件扫描。扫描不会打开插件界面，也不会改动插件文件。", 1);
+
+    private readonly PluginDatabase _database;
+    private readonly string _databasePath;
+    private readonly Dictionary<string, RadioButton> _navItems = [];
+    private readonly Dictionary<string, TextBlock> _navCounts = [];
+    private readonly Dictionary<string, Control> _pages = [];
+    private readonly Border _navDivider;
+
+    public string CurrentPage { get; private set; } = "";
+
+    // 设计器需要无参构造函数。
+    public MainWindow() : this(new PluginDatabase(Path.Combine(Path.GetTempPath(), "whatplugin-designer.db")), "") { }
+
+    public MainWindow(PluginDatabase database, string databasePath)
+    {
+        _database = database;
+        _databasePath = databasePath;
+        InitializeComponent();
+
+        ThemeManager.Apply(_database.GetSetting(ThemeManager.Setting));
+        PublishLookupTheme();
+        SetupChrome();
+
+        _navDivider = new Border { Height = 1, Margin = new(6, 10), IsHitTestVisible = false };
+        _navDivider.Bind(Border.BackgroundProperty, this.GetResourceObservable("Line"));
+        foreach (var page in Pages)
+            _navItems[page.Key] = CreateNavItem(page);
+        NavFixed.Children.Add(_navItems[SettingsPage.Key] = CreateNavItem(SettingsPage));
+        ApplyNavOrder();
+        RefreshCounts();
+
+        Navigate("Plugins");
+        StatusText.Text = "就绪";
+    }
+
+    /// <summary>状态栏上的文字（测试检查用）。</summary>
+    public string Status => StatusText.Text ?? "";
+
+    /// <summary>
+    /// 窗口外框：内容延伸到标题栏，和 Windows 版一样没有单独的标题栏。
+    /// Mac 上左上角留出系统的红黄绿按钮；顶部空白处可以拖动窗口。
+    /// </summary>
+    private void SetupChrome()
+    {
+        ExtendClientAreaToDecorationsHint = true;
+        ExtendClientAreaTitleBarHeightHint = 38;
+        if (OperatingSystem.IsMacOS())
+            Brand.Margin = new(6, 40, 0, 22);
+
+        foreach (var strip in new Control[] { TitleStrip, Brand })
+            strip.PointerPressed += (_, e) =>
+            {
+                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                    BeginMoveDrag(e);
+            };
+    }
+
+    private RadioButton CreateNavItem(NavDefinition page)
+    {
+        var count = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        count.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("Muted"));
+        _navCounts[page.Key] = count;
+
+        var content = new DockPanel();
+        DockPanel.SetDock(count, Dock.Right);
+        content.Children.Add(count);
+        var icon = new MaterialIcon { Kind = page.Icon, Width = 17, Height = 17, Margin = new(0, 0, 12, 0) };
+        DockPanel.SetDock(icon, Dock.Left);
+        content.Children.Add(icon);
+        content.Children.Add(new TextBlock { Text = page.Label, VerticalAlignment = VerticalAlignment.Center });
+
+        var item = new RadioButton { Content = content, Tag = page.Key, Classes = { "Nav" } };
+        AutomationProperties.SetName(item, page.Label);
+        item.IsCheckedChanged += (_, _) =>
+        {
+            if (item.IsChecked == true)
+                Navigate(page.Key);
+        };
+        item.ContextMenu = page == SettingsPage ? null : NavMenu(page.Key);
+        return item;
+    }
+
+    // ---------- 导航顺序（和 Windows 版共用保存格式） ----------
+
+    private IReadOnlyList<string> DefaultOrder => Pages.Select(p => p.Key).ToList();
+
+    public List<string> NavKeys => NavList.Children.OfType<RadioButton>().Select(r => (string)r.Tag!).ToList();
+
+    private void ApplyNavOrder() =>
+        Arrange(NavOrder.Apply(DefaultOrder, NavOrder.Parse(_database.GetSetting(NavOrder.Setting))));
+
+    private void Arrange(IReadOnlyList<string> order)
+    {
+        NavList.Children.Clear();
+        foreach (var key in order)
+        {
+            // 分隔线不是导航项：始终在“健康检查”上面，它被移到最上面时不显示。
+            if (key == "Health" && NavList.Children.Count > 0)
+                NavList.Children.Add(_navDivider);
+            NavList.Children.Add(_navItems[key]);
+        }
+    }
+
+    private ContextMenu NavMenu(string key)
+    {
+        var up = new MenuItem { Header = "上移" };
+        var down = new MenuItem { Header = "下移" };
+        var reset = new MenuItem { Header = "恢复默认顺序" };
+        up.Click += (_, _) => MoveNav(key, -1);
+        down.Click += (_, _) => MoveNav(key, 1);
+        reset.Click += (_, _) => SaveNavOrder(DefaultOrder.ToList());
+        var menu = new ContextMenu { ItemsSource = new object[] { up, down, new Separator(), reset } };
+        menu.Opening += (_, _) =>
+        {
+            var keys = NavKeys;
+            up.IsEnabled = keys.IndexOf(key) > 0;
+            down.IsEnabled = keys.IndexOf(key) < keys.Count - 1;
+        };
+        return menu;
+    }
+
+    public void MoveNav(string key, int delta)
+    {
+        if (NavOrder.Move(NavKeys, key, delta) is { } order)
+            SaveNavOrder(order);
+    }
+
+    private void SaveNavOrder(List<string> order)
+    {
+        var saved = NavOrder.Parse(_database.GetSetting(NavOrder.Setting));
+        _database.SetSetting(NavOrder.Setting, NavOrder.Serialize(NavOrder.Merge(saved, order)));
+        Arrange(order);
+        _navItems[CurrentPage].Focus();
+    }
+
+    // ---------- 页面 ----------
+
+    public void Navigate(string key)
+    {
+        if (CurrentPage == key)
+            return;
+        CurrentPage = key;
+        _navItems[key].IsChecked = true;
+        if (!_pages.TryGetValue(key, out var page))
+        {
+            page = CreatePage(key);
+            _pages[key] = page;
+            PageHost.Children.Add(page);
+        }
+        foreach (var other in _pages.Values)
+            other.IsVisible = other == page;
+    }
+
+    private Control CreatePage(string key)
+    {
+        if (key == SettingsPage.Key)
+        {
+            var settings = new SettingsView();
+            settings.ThemeChosen += OnThemeChosen;
+            return new PageFrame(SettingsPage.Label, SettingsPage.Subtitle, settings);
+        }
+        var definition = Pages.First(p => p.Key == key);
+        return new PageFrame(definition.Label, definition.Subtitle, new PendingView(definition.Stage));
+    }
+
+    private void OnThemeChosen(string id)
+    {
+        if (id == ThemeManager.Current.Id)
+            return;
+        ThemeManager.Apply(id);
+        _database.SetSetting(ThemeManager.Setting, id);
+        PublishLookupTheme();
+        StatusText.Text = "已切换到“" + ThemeManager.Current.Name + "”主题";
+    }
+
+    /// <summary>DAW 里的查询窗口打开时直接用这份配色（只在用默认数据库时写，测试库不影响它）。</summary>
+    private void PublishLookupTheme() =>
+        LookupExport.PublishTheme(_databasePath, PluginDatabase.DefaultPath, ThemeManager.Current);
+
+    public void RefreshCounts()
+    {
+        var counts = NavCounts.Load(_database);
+        _navCounts["Plugins"].Text = counts.Plugins.ToString();
+        _navCounts["Blacklist"].Text = NavCounts.Label(counts.Blacklisted);
+        _navCounts["Chains"].Text = NavCounts.Label(counts.Chains);
+        _navCounts["Wishes"].Text = NavCounts.Label(counts.Wishes);
+        _navCounts["Accounts"].Text = NavCounts.Label(counts.Purchases);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        // Alt+上下键调整当前导航项的位置，和 Windows 版一样。
+        if (e.KeyModifiers == KeyModifiers.Alt && e.Key is Key.Up or Key.Down
+            && e.Source is RadioButton { Tag: string key } && key != SettingsPage.Key)
+        {
+            MoveNav(key, e.Key == Key.Up ? -1 : 1);
+            e.Handled = true;
+            return;
+        }
+        base.OnKeyDown(e);
+    }
+}

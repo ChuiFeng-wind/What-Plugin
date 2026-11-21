@@ -26,6 +26,17 @@ jobs:
           dotnet-version: 10.0.x
       # Windows 上测 Windows 版和跨平台版两份；Mac 上只有跨平台版，Windows 专用的测试会显示为跳过。
       - run: dotnet test tests/WhatPlugin.Tests --nologo
+      # 跨平台界面：无界面渲染，顺便把每一页画成图片，看各系统上的字体和排版。
+      - name: 跨平台界面测试
+        shell: bash
+        run: WHATPLUGIN_SCREENSHOTS="$RUNNER_TEMP/screenshots" dotnet test tests/WhatPlugin.Desktop.Tests --nologo
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ matrix.os }}
+          path: ${{ runner.temp }}/screenshots
+          retention-days: 14
+          if-no-files-found: ignore
 
   # Mac 命令行版从头到尾走一遍：编扫描器（通用二进制）、编 SDK 自带的示例插件、
   # 发布命令行工具，再用临时数据库扫一个临时插件目录，检查结果。

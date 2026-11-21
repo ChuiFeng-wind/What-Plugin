@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:WhatPlugin.Desktop"
+             x:Class="WhatPlugin.Desktop.SettingsView">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,8,16">
+            <Border Classes="Card" Padding="20,18" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="主题" Classes="SectionTitle"/>
+                    <TextBlock Text="点一下立即生效，下次打开会保持。" Classes="SmallNote" Margin="0,3,0,12"/>
+                    <ItemsControl x:Name="ThemeList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <!-- 预览用这套配色自己的颜色画，不跟随当前主题。 -->
+                            <DataTemplate x:DataType="local:ThemeOption">
+                                <RadioButton Classes="ThemeCard" Tag="{Binding Id}" IsChecked="{Binding IsCurrent, Mode=OneTime}"
+                                             AutomationProperties.Name="{Binding Name}" IsCheckedChanged="Theme_Changed">
+                                    <StackPanel>
+                                        <Border Height="86" CornerRadius="7" Background="{Binding Bg}" BorderBrush="{Binding Line}" BorderThickness="1" ClipToBounds="True">
+                                            <Grid ColumnDefinitions="36,*">
+                                                <Border Background="{Binding Side}" CornerRadius="6,0,0,6">
+                                                    <StackPanel Margin="7,10,7,0">
+                                                        <Border Height="10" CornerRadius="3" Background="{Binding Accent}" Margin="0,0,8,8"/>
+                                                        <Border Height="3" CornerRadius="1.5" Background="{Binding Dim}" Margin="0,0,0,6"/>
+                                                        <Border Height="3" CornerRadius="1.5" Background="{Binding Dim}" Margin="0,0,4,6"/>
+                                                        <Border Height="3" CornerRadius="1.5" Background="{Binding Dim}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Margin="10,10,10,0">
+                                                    <Border Height="5" Width="56" CornerRadius="2" Background="{Binding Ink}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+                                                    <Border Height="38" CornerRadius="4" Background="{Binding Card}" BorderBrush="{Binding Line}" BorderThickness="1">
+                                                        <StackPanel Margin="7,8,7,0">
+                                                            <Border Height="3" CornerRadius="1.5" Background="{Binding Dim}" Margin="0,0,24,6"/>
+                                                            <Border Height="5" Width="30" CornerRadius="2" Background="{Binding Accent}" HorizontalAlignment="Left"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                        <DockPanel Margin="2,9,2,0">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </StackPanel>
+                                </RadioButton>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="Card" Padding="20,18" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="插件扫描" Classes="SectionTitle"/>
+                    <TextBlock Text="扫描文件夹、VST2 文件夹和扫描按钮在第 3 阶段移植。" Classes="SmallNote" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

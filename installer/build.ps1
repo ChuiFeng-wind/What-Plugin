@@ -22,6 +22,7 @@ $sdk = $Vst3Sdk.Replace('\', '/')
 & $CMake --build build\plugin --config Release --target WhatPluginLookup --parallel | Out-Null
 
 dotnet test tests\WhatPlugin.Tests -nologo --verbosity quiet
+dotnet test tests\WhatPlugin.Desktop.Tests -nologo --verbosity quiet
 
 Remove-Item dist -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force dist\app, dist\VST3 | Out-Null

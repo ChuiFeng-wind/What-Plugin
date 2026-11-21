@@ -1,0 +1,163 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 和 Windows 版 Theme.xaml 一一对应：同样的尺寸、圆角和配色键。 -->
+
+    <!-- 文字 -->
+    <Style Selector="TextBlock.PageTitle">
+        <Setter Property="FontSize" Value="26"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="TextBlock.PageSubtitle">
+        <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+        <Setter Property="Margin" Value="0,3,0,0"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.FieldLabel">
+        <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Margin" Value="0,16,0,6"/>
+    </Style>
+    <Style Selector="TextBlock.SmallNote">
+        <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="LineHeight" Value="18"/>
+    </Style>
+    <Style Selector="TextBlock.SectionTitle">
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <!-- 面板 -->
+    <Style Selector="Border.Card">
+        <Setter Property="Background" Value="{DynamicResource Surface}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="12"/>
+    </Style>
+
+    <!-- 按钮：默认、主操作（Primary）、无边框（Ghost） -->
+    <Style Selector="Button">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SurfaceActive}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+    <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Line}"/>
+    </Style>
+    <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+    </Style>
+    <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="Opacity" Value="0.4"/>
+    </Style>
+
+    <Style Selector="Button.Primary">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.Primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentHover}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentHover}"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
+    </Style>
+    <Style Selector="Button.Primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentPressed}"/>
+    </Style>
+
+    <Style Selector="Button.Ghost">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextDim}"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="Height" Value="38"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    </Style>
+    <Style Selector="Button.Ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Surface}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+
+    <!-- 左侧导航项：选中时左边一条琥珀色竖线 -->
+    <Style Selector="RadioButton.Nav">
+        <Setter Property="Foreground" Value="{DynamicResource TextDim}"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="Margin" Value="0,0,0,2"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="GroupName" Value="Nav"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel>
+                    <Border Name="Root" Background="Transparent" CornerRadius="8" BorderThickness="1" BorderBrush="Transparent" Padding="12,0">
+                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Center"/>
+                    </Border>
+                    <Border Name="Bar" Width="3" Height="18" CornerRadius="2" Background="{DynamicResource Accent}"
+                            HorizontalAlignment="Left" Margin="1,0,0,0" IsVisible="False"/>
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="RadioButton.Nav:pointerover /template/ Border#Root">
+        <Setter Property="Background" Value="{DynamicResource Surface}"/>
+    </Style>
+    <Style Selector="RadioButton.Nav:checked">
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+    <Style Selector="RadioButton.Nav:checked /template/ Border#Root">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}"/>
+    </Style>
+    <Style Selector="RadioButton.Nav:checked /template/ Border#Bar">
+        <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="RadioButton.Nav:focus-visible /template/ Border#Root">
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+    </Style>
+
+    <!-- 设置页的主题卡片 -->
+    <Style Selector="RadioButton.ThemeCard">
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="Width" Value="166"/>
+        <Setter Property="Margin" Value="0,0,10,10"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="GroupName" Value="Theme"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Root" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="1.5" CornerRadius="10" Padding="8">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="RadioButton.ThemeCard:pointerover /template/ Border#Root">
+        <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}"/>
+    </Style>
+    <Style Selector="RadioButton.ThemeCard:focus-visible /template/ Border#Root">
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+    </Style>
+    <Style Selector="RadioButton.ThemeCard:checked /template/ Border#Root">
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+    </Style>
+</Styles>
