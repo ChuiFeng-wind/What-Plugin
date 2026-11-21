@@ -56,10 +56,11 @@ jobs:
 
       - name: 编译示例插件 AGain
         run: |
-          cmake -S "$SDK" -B "$WORK/sdk-build" -DCMAKE_BUILD_TYPE=Release \
+          # SDK 的 Mac 部分有 Objective-C++，要用 Xcode 生成器（Makefile 不行）。
+          cmake -S "$SDK" -B "$WORK/sdk-build" -G Xcode \
             -DSMTG_CREATE_PLUGIN_LINK=OFF -DSMTG_RUN_VST_VALIDATOR=OFF \
             -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_AUV2_BUILDS=OFF
-          cmake --build "$WORK/sdk-build" --target again --parallel
+          cmake --build "$WORK/sdk-build" --config Release --target again --parallel -- -quiet
 
       - name: 发布命令行工具（Apple 芯片和 Intel 各一份）
         run: |
