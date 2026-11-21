@@ -53,7 +53,11 @@
             <Border x:Name="TitleStrip" Background="Transparent"/>
             <Panel x:Name="PageHost" Grid.Row="1"/>
             <Border Grid.Row="2" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="28,7">
-                <TextBlock x:Name="StatusText" FontSize="12" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
+                <DockPanel>
+                    <ProgressBar x:Name="ScanProgress" DockPanel.Dock="Right" Width="220" Height="6" MinHeight="6" VerticalAlignment="Center" IsVisible="False"
+                                 Foreground="{DynamicResource Accent}" Background="{DynamicResource SurfaceActive}"/>
+                    <TextBlock x:Name="StatusText" FontSize="12" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                </DockPanel>
             </Border>
         </Grid>
     </Grid>

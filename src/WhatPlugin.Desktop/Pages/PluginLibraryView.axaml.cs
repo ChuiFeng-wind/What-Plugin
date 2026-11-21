@@ -241,6 +241,14 @@ public partial class PluginLibraryView : UserControl
     /// <summary>按名称选中一款插件（测试用）。</summary>
     public void Select(string name) => Select(Shown.FirstOrDefault(p => p.Name == name));
 
+    /// <summary>从别的页面跳过来看某一款：退出推荐、清除筛选，再选中它。</summary>
+    public void ShowPlugin(string key)
+    {
+        ExitRecommendation();
+        ClearFilters();
+        Select(Shown.FirstOrDefault(p => p.Row.Key == key));
+    }
+
     private void ClearFilters()
     {
         _suppressFilter = true;

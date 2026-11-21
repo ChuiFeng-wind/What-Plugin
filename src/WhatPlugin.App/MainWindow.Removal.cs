@@ -184,20 +184,6 @@ public partial class MainWindow
     }
 
     /// <summary>删掉的文件又出现了，多半是官方更新或修复装回来的。提示一次后不再记录。</summary>
-    private string CheckReturnedFiles()
-    {
-        var returned = _database.LoadRemovedFiles().Where(r => RemovalPlanner.PathExists(r.Path)).ToList();
-        // 同一款的几个格式一起回来，算一次。
-        foreach (var plugin in returned.GroupBy(r => r.PluginKey))
-            RecordUsage(() => _database.RecordUsage(UsageKinds.Reappeared, 1, plugin.Max(r => r.RemovedUtc).Ticks, plugin.Key));
-        foreach (var file in returned)
-            _database.DeleteRemovedFile(file.Path);
-        UpdateRemovedFilesButton();
-        return returned.Count == 0
-            ? ""
-            : $"。注意：{string.Join("、", returned.Select(r => $"{r.PluginName} 的 {Labels.Format(r.Format)}").Distinct().Take(5))} 又回来了，可能被官方更新或修复装回";
-    }
-
     // ---------- 垃圾桶：卸载 ----------
 
     private void UpdateUninstallButton()

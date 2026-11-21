@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:core="clr-namespace:WhatPlugin.Core;assembly=WhatPlugin.Core"
+             x:Class="WhatPlugin.Desktop.HealthView">
+    <!-- 和 Windows 版一样三栏：检查项、问题列表、选中一行的文件。只读：不运行插件，不改动任何文件。 -->
+    <Grid ColumnDefinitions="172,16,*,16,300" Margin="0,0,0,18">
+        <Border Classes="Card" Padding="8">
+            <ListBox x:Name="CategoryList" Classes="Category" AutomationProperties.Name="检查项">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="core:HealthCategoryRow">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <Border Grid.Column="2" Classes="Card" ClipToBounds="True">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Line}">
+                    <Grid ColumnDefinitions="*,1.3*">
+                        <TextBlock Text="名称" Classes="ColumnHeader" Margin="14,0,8,0"/>
+                        <TextBlock Grid.Column="1" Text="情况" Classes="ColumnHeader" Margin="14,0,8,0"/>
+                    </Grid>
+                </Border>
+                <Panel>
+                    <ListBox x:Name="IssueList" Classes="Plugins" AutomationProperties.Name="检查结果">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="core:HealthRow">
+                                <Grid ColumnDefinitions="*,1.3*" Height="52" Background="Transparent">
+                                    <StackPanel VerticalAlignment="Center" Margin="14,0,8,0">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Detail}" Foreground="{DynamicResource TextDim}" FontSize="12.5" Margin="14,0,8,0"
+                                               VerticalAlignment="Center" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Detail}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <StackPanel x:Name="IssuesEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False">
+                        <mi:MaterialIcon Kind="CheckCircleOutline" Width="36" Height="36" Foreground="{DynamicResource LineStrong}"/>
+                        <TextBlock Text="没有发现问题" Foreground="{DynamicResource Muted}" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Panel>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Column="4" Classes="Card">
+            <Panel>
+                <TextBlock x:Name="DetailEmpty" Text="选择一行查看文件" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <DockPanel x:Name="DetailPanel" Margin="16" IsVisible="False">
+                    <TextBlock x:Name="DetailTitle" DockPanel.Dock="Top" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="DetailNote" DockPanel.Dock="Top" Classes="SmallNote" Margin="0,4,0,8"/>
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                        <Button x:Name="SearchButton" Content="查更新" Classes="Primary" Height="36" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                ToolTip.Tip="用浏览器搜索。软件自己不联网"/>
+                        <Button x:Name="RevealButton" Margin="0,6,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                        <Button x:Name="OpenButton" Content="查看这款插件" Classes="Ghost" Margin="0,4,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                    </StackPanel>
+                    <ListBox x:Name="FileList" Classes="Category" AutomationProperties.Name="插件文件">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="core:HealthFileRow">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Summary}" FontSize="12.5"/>
+                                    <TextBlock Text="{Binding Path}" Foreground="{DynamicResource Muted}" FontSize="11.5" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Panel>
+        </Border>
+    </Grid>
+</UserControl>

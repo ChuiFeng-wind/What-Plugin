@@ -10,7 +10,7 @@ using WhatPlugin.Core;
 namespace WhatPlugin.Desktop;
 
 /// <summary>主窗口：左侧导航加右侧页面。各页面在后续阶段从 Windows 版逐个移植过来。</summary>
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IScanHost
 {
     /// <summary>一个导航项。Key 和 Windows 版一致，保存的导航顺序两边通用。</summary>
     public sealed record NavDefinition(string Key, string Label, MaterialIconKind Icon, string Subtitle, int Stage);
@@ -33,6 +33,9 @@ public partial class MainWindow : Window
 
     private readonly PluginDatabase _database;
     private readonly string _databasePath;
+    private readonly ScanEnvironment _environment;
+    private CancellationTokenSource? _scanCancel;
+    private IReadOnlyList<HostBlacklistEntry>? _hostBlacklist;
     private readonly Dictionary<string, RadioButton> _navItems = [];
     private readonly Dictionary<string, TextBlock> _navCounts = [];
     private readonly Dictionary<string, Control> _pages = [];
@@ -43,10 +46,12 @@ public partial class MainWindow : Window
     // 设计器需要无参构造函数。
     public MainWindow() : this(new PluginDatabase(Path.Combine(Path.GetTempPath(), "whatplugin-designer.db")), "") { }
 
-    public MainWindow(PluginDatabase database, string databasePath)
+    /// <param name="environment">扫描器、插件目录和 DAW 记录在哪；不给就用这台电脑上的。测试给临时目录。</param>
+    public MainWindow(PluginDatabase database, string databasePath, ScanEnvironment? environment = null)
     {
         _database = database;
         _databasePath = databasePath;
+        _environment = environment ?? ScanEnvironment.ThisComputer(Path.Combine(AppContext.BaseDirectory, AppPlatform.Executable("WhatPluginScanner")));
         InitializeComponent();
 
         ThemeManager.Apply(_database.GetSetting(ThemeManager.Setting));
@@ -61,12 +66,20 @@ public partial class MainWindow : Window
         ApplyNavOrder();
         RefreshCounts();
 
+        RefreshHealth();
+
         Navigate("Plugins");
-        Closing += (_, _) => Library(CurrentPage)?.SaveCurrent();
+        Closing += (_, _) =>
+        {
+            _scanCancel?.Cancel();
+            Library(CurrentPage)?.SaveCurrent();
+        };
     }
 
     /// <summary>状态栏上的文字（测试检查用）。</summary>
     public string Status => StatusText.Text ?? "";
+
+    public void ShowStatus(string text) => StatusText.Text = text;
 
     /// <summary>
     /// 窗口外框：内容延伸到标题栏，和 Windows 版一样没有单独的标题栏。
@@ -185,7 +198,23 @@ public partial class MainWindow : Window
             other.IsVisible = other == page;
         // 插件库和垃圾桶各是一页，在一页里移入或恢复后，另一页显示时要重新读。
         Library(key)?.Load();
+        if (Settings is { } settings && key == SettingsPage.Key)
+        {
+            settings.Refresh();
+            // 别的页面留下的状态（例如插件库的数量）在这里没意义；扫描进度要留着。
+            if (!IsScanning)
+                StatusText.Text = "";
+        }
+        if (Health is { } health && key == "Health")
+        {
+            RefreshHealth();
+            StatusText.Text = health.Summary;
+        }
     }
+
+    public SettingsView? Settings => _pages.GetValueOrDefault(SettingsPage.Key) is PageFrame { Content: SettingsView view } ? view : null;
+
+    public HealthView? Health => _pages.GetValueOrDefault("Health") is PageFrame { Content: HealthView view } ? view : null;
 
     /// <summary>插件库或垃圾桶页面；别的页面返回 null。</summary>
     public PluginLibraryView? Library(string key) =>
@@ -195,7 +224,7 @@ public partial class MainWindow : Window
     {
         if (key == SettingsPage.Key)
         {
-            var settings = new SettingsView();
+            var settings = new SettingsView(_database, _environment, this);
             settings.ThemeChosen += OnThemeChosen;
             return new PageFrame(SettingsPage.Label, SettingsPage.Subtitle, settings);
         }
@@ -209,7 +238,92 @@ public partial class MainWindow : Window
             library.CountsChanged += RefreshCounts;
             return frame;
         }
+        if (key == "Health")
+        {
+            var health = new HealthView();
+            var frame = new PageFrame(definition.Label, definition.Subtitle, health);
+            health.SubtitleChanged += text => frame.Subtitle = text;
+            health.StatusChanged += text => StatusText.Text = text;
+            health.OpenPlugin += ShowPlugin;
+            return frame;
+        }
         return new PageFrame(definition.Label, definition.Subtitle, new PendingView(definition.Stage));
+    }
+
+    /// <summary>在插件库（或垃圾桶）里打开一款插件。</summary>
+    public void ShowPlugin(PluginRow plugin)
+    {
+        var key = plugin.User.Hidden ? "Blacklist" : "Plugins";
+        Navigate(key);
+        Library(key)?.ShowPlugin(plugin.Key);
+    }
+
+    // ---------- 健康检查 ----------
+
+    /// <summary>安装情况变化后都要重算，侧边栏的数字也靠它。DAW 的屏蔽列表只在扫描后重读。</summary>
+    public void RefreshHealth()
+    {
+        _hostBlacklist ??= _environment.Blacklist();
+        var rows = _database.LoadEffects();
+        var report = PluginHealth.Build(rows, _hostBlacklist);
+        _navCounts["Health"].Text = report.NeedsAttention > 0 ? report.NeedsAttention.ToString() : "";
+        Health?.Show(report, UpdateGuide.Build(rows));
+    }
+
+    // ---------- 扫描 ----------
+
+    public bool IsScanning => _scanCancel != null;
+
+    public async Task RunScanAsync(ScanRequest request)
+    {
+        if (_scanCancel != null)
+            return;
+        Library(CurrentPage)?.SaveCurrent();
+        _scanCancel = new CancellationTokenSource();
+        SetScanning(true);
+        var progress = new Progress<ScanProgress>(p =>
+        {
+            if (_scanCancel == null)
+                return;
+            ScanProgress.Maximum = Math.Max(p.Total, 1);
+            ScanProgress.Value = p.Done;
+            StatusText.Text = $"正在扫描 {p.Done}/{p.Total}：{Path.GetFileName(p.Current)}";
+        });
+
+        ScanOutcome outcome;
+        try
+        {
+            // 扫描期间可能还在编辑插件详情，重新读取前先保存。
+            outcome = await ScanWorkflow.RunAsync(_database, _environment, request, progress, _scanCancel.Token,
+                () => Library(CurrentPage)?.SaveCurrent());
+        }
+        finally
+        {
+            _scanCancel.Dispose();
+            _scanCancel = null;
+            SetScanning(false);
+        }
+
+        if (outcome.Summary != null)
+        {
+            _hostBlacklist = null;
+            Library("Plugins")?.Load();
+            Library("Blacklist")?.Load();
+            RefreshCounts();
+            RefreshHealth();
+        }
+        Settings?.Refresh();
+        StatusText.Text = outcome.Message;
+    }
+
+    public void CancelScan() => _scanCancel?.Cancel();
+
+    private void SetScanning(bool scanning)
+    {
+        ScanProgress.IsVisible = scanning;
+        ScanProgress.Value = 0;
+        ImportButton.IsEnabled = !scanning;
+        Settings?.SetScanning(scanning);
     }
 
     private void OnThemeChosen(string id)

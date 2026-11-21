@@ -5,7 +5,12 @@ public static class PluginDiscovery
 {
     /// <summary>默认目录加上用户在设置里添加的 VST2 目录。</summary>
     public static IReadOnlyList<(string Path, PluginFormat Format)> Roots(IEnumerable<string> extraVst2Folders) =>
-        DefaultRoots()
+        Roots(DefaultRoots(), extraVst2Folders);
+
+    /// <summary>给定的默认目录加上用户添加的 VST2 目录（测试用临时目录代替系统目录）。</summary>
+    public static IReadOnlyList<(string Path, PluginFormat Format)> Roots(
+        IEnumerable<(string Path, PluginFormat Format)> defaults, IEnumerable<string> extraVst2Folders) =>
+        defaults
             .Concat(extraVst2Folders.Select(f => (f, PluginFormat.Vst2)))
             .DistinctBy(r => Path.TrimEndingDirectorySeparator(r.Item1), StringComparer.OrdinalIgnoreCase)
             .ToList();

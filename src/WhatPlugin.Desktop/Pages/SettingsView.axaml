@@ -1,7 +1,26 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:local="clr-namespace:WhatPlugin.Desktop"
+             xmlns:core="clr-namespace:WhatPlugin.Core;assembly=WhatPlugin.Core"
              x:Class="WhatPlugin.Desktop.SettingsView">
+    <UserControl.Resources>
+        <!-- 一个插件文件夹：路径、文件数，自己加的可以移除。 -->
+        <DataTemplate x:Key="FolderTemplate" x:DataType="core:ScanFolderInfo">
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="0,7">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Classes="Ghost" Tag="{Binding Path}" Click="RemoveVst2Folder_Click" Margin="8,0,0,0" Width="28" Height="28" Padding="0"
+                            IsVisible="{Binding Removable}" AutomationProperties.Name="{Binding Path, StringFormat=移除文件夹 {0}}"
+                            ToolTip.Tip="不再读取这个文件夹，插件文件不受影响">
+                        <mi:MaterialIcon Kind="Close" Width="14" Height="14"/>
+                    </Button>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Note}" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    <TextBlock Text="{Binding Path}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="0,0,8,16">
             <Border Classes="Card" Padding="20,18" Margin="0,0,0,12">
@@ -55,8 +74,78 @@
 
             <Border Classes="Card" Padding="20,18" Margin="0,0,0,12">
                 <StackPanel>
-                    <TextBlock Text="插件扫描" Classes="SectionTitle"/>
-                    <TextBlock Text="扫描文件夹、VST2 文件夹和扫描按钮在第 3 阶段移植。" Classes="SmallNote" Margin="0,3,0,0"/>
+                    <DockPanel>
+                        <Button x:Name="ClearUsageButton" DockPanel.Dock="Right" Content="清空记录" Classes="Ghost" VerticalAlignment="Top"
+                                ToolTip.Tip="删除已经记下的使用统计。已经解锁的成就保留"/>
+                        <StackPanel>
+                            <TextBlock Text="使用统计（仅本机）" Classes="SectionTitle"/>
+                            <TextBlock Classes="SmallNote" Margin="0,3,12,10"
+                                       Text="只记日期和次数：哪天打开过、导出过几次备份、心愿单有几项、工程缺失数的变化等。不记路径、账号、密码、序列号和你写的文字，也不会上传。成就包用它判断“好久不见”“以防万一”这类成就，没装成就包时也先记着，以后装上能算上以前的。"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <CheckBox x:Name="UsageEnabledBox" Content="记录使用统计" HorizontalAlignment="Left"/>
+                    <TextBlock x:Name="UsageSummary" Classes="SmallNote" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="Card" Padding="20,18" Margin="0,0,0,12">
+                <StackPanel>
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button x:Name="CancelScanButton" Content="停止扫描" Margin="0,0,6,0" IsVisible="False"/>
+                            <Button x:Name="FullScanButton" Content="完整重扫" Classes="Ghost" Margin="0,0,6,0"
+                                    ToolTip.Tip="重新扫描全部文件，也会重试之前读取失败的插件"/>
+                            <Button x:Name="ScanButton" AutomationProperties.Name="扫描新增" ToolTip.Tip="只扫描新增或有变化的文件">
+                                <StackPanel Orientation="Horizontal">
+                                    <mi:MaterialIcon Kind="Refresh" Width="15" Height="15" Margin="0,0,8,0"/>
+                                    <TextBlock Text="扫描新增" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="VST3" Classes="SectionTitle"/>
+                            <TextBlock x:Name="MainSummary" Classes="SmallNote" Margin="0,3,12,0"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <TextBlock x:Name="MainFoldersNote" Classes="FieldLabel" Margin="0,14,0,6"/>
+                    <ItemsControl x:Name="MainFolderList" ItemTemplate="{StaticResource FolderTemplate}" AutomationProperties.Name="VST3 文件夹"/>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="Card" Padding="20,18">
+                <StackPanel>
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button x:Name="AddVst2FolderButton" Content="添加文件夹" Classes="Ghost" Margin="0,0,6,0"/>
+                            <Button x:Name="Vst2ScanButton" AutomationProperties.Name="扫描 VST2" ToolTip.Tip="只读取文件信息，不加载插件">
+                                <StackPanel Orientation="Horizontal">
+                                    <mi:MaterialIcon Kind="Refresh" Width="15" Height="15" Margin="0,0,8,0"/>
+                                    <TextBlock Text="扫描 VST2" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="VST2" Classes="SectionTitle"/>
+                            <TextBlock x:Name="Vst2Summary" Classes="SmallNote" Margin="0,3,12,0"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <ItemsControl x:Name="SuggestionList" Margin="0,14,0,0" AutomationProperties.Name="建议添加的 VST2 文件夹">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="core:SuggestedFolder">
+                                <Border Background="{DynamicResource AccentSoft}" CornerRadius="8" Padding="12,8" Margin="0,0,0,6">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="添加并扫描" Classes="Primary" Tag="{Binding Path}" Click="AddSuggestedFolder_Click"
+                                                AutomationProperties.Name="{Binding Path, StringFormat=添加并扫描 {0}}"/>
+                                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                            <Run Text="{Binding Label, Mode=OneWay}"/><Run Text="{Binding Path, Mode=OneWay}" FontWeight="SemiBold"/>
+                                        </TextBlock>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="Vst2HostNote" Classes="FieldLabel" TextWrapping="Wrap" Margin="0,14,0,6"/>
+                    <ItemsControl x:Name="Vst2FolderList" ItemTemplate="{StaticResource FolderTemplate}" AutomationProperties.Name="VST2 文件夹"/>
                 </StackPanel>
             </Border>
         </StackPanel>

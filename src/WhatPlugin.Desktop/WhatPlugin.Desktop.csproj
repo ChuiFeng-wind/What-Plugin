@@ -30,6 +30,13 @@
     <AvaloniaResource Include="..\WhatPlugin.App\logo.png" Link="Assets\logo.png" />
     <AvaloniaResource Include="..\WhatPlugin.App\app.ico" Link="Assets\app.ico" />
   </ItemGroup>
+  <!-- 扫描器由 CMake 单独编译（Windows 是 .exe，Mac 没有扩展名），编译过才带上。 -->
+  <ItemGroup Condition="Exists('../../build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner.exe')">
+    <None Include="../../build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner.exe" Link="WhatPluginScanner.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('../../build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner') And !Exists('../../build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner.exe')">
+    <None Include="../../build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner" Link="WhatPluginScanner" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WhatPlugin.Core\WhatPlugin.Core.csproj" />
   </ItemGroup>

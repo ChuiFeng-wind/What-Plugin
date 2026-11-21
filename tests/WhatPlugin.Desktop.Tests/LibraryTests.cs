@@ -73,7 +73,7 @@ public sealed class LibraryTests : IDisposable
 
     private MainWindow Open(double width = 1440, double height = 900)
     {
-        var window = new MainWindow(_database, _dbPath) { Width = width, Height = height };
+        var window = new MainWindow(_database, _dbPath, new TestEnvironment(Path.Combine(_dir, "env")).Scan) { Width = width, Height = height };
         window.Show();
         Settle(window);
         return window;

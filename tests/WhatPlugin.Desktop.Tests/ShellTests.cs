@@ -45,7 +45,7 @@ public sealed class ShellTests : IDisposable
 
     private MainWindow Open()
     {
-        var window = new MainWindow(_database, _dbPath);
+        var window = new MainWindow(_database, _dbPath, new TestEnvironment(Path.Combine(_dir, "env")).Scan);
         window.Show();
         return window;
     }

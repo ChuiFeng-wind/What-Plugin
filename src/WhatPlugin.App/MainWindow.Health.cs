@@ -11,8 +11,6 @@ namespace WhatPlugin.App;
 /// <summary>健康检查和查更新入口。只读：不运行插件，不改动任何文件。</summary>
 public partial class MainWindow
 {
-    private const string UpdatesCategory = "按厂家查更新";
-
     private HealthReport _health = new([], 0);
     private IReadOnlyList<VendorUpdate> _updates = [];
     private bool _refreshingHealth;
@@ -28,11 +26,7 @@ public partial class MainWindow
         CountHealth.Text = _health.NeedsAttention > 0 ? _health.NeedsAttention.ToString() : "";
 
         var selected = (HealthCategories.SelectedItem as HealthCategoryRow)?.Title;
-        var categories = _health.Categories
-            .Select(c => new HealthCategoryRow(c.Title, c.Explanation, c.Count, c.Kind))
-            .Append(new HealthCategoryRow(UpdatesCategory,
-                "没有可靠的公开版本数据库，自动比对容易误报，所以这里列出每个厂家通常用什么工具更新。这个软件自己不联网。", _updates.Count, null))
-            .ToList();
+        var categories = HealthListing.Categories(_health, _updates);
         _refreshingHealth = true;
         HealthCategories.ItemsSource = categories;
         HealthCategories.SelectedItem = categories.FirstOrDefault(c => c.Title == selected) ?? categories[0];
@@ -52,12 +46,7 @@ public partial class MainWindow
             return;
         HealthExplain.Text = category.Explanation;
 
-        List<HealthRow> rows = category.Kind is { } kind
-            ? _health.Issues.Where(i => i.Kind == kind)
-                .OrderBy(i => i.Plugin.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(i => new HealthRow(i.Plugin.Name, i.Plugin.Vendor.Length > 0 ? i.Plugin.Vendor : "未知", i.Detail, i.Plugin, null))
-                .ToList()
-            : _updates.Select(v => new HealthRow(v.Vendor, $"{v.Count} 款", "通常用 " + v.Tool, null, v)).ToList();
+        var rows = HealthListing.Rows(category, _health, _updates);
         HealthGrid.ItemsSource = rows;
         HealthEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_page == AppPage.Health)
@@ -76,10 +65,9 @@ public partial class MainWindow
             return;
 
         HealthPanelTitle.Text = row.Title;
-        HealthPanelNote.Text = row.Vendor != null ? "通常用 " + row.Vendor.Tool + " 检查更新" : row.Detail;
+        HealthPanelNote.Text = HealthListing.Note(row);
         var plugin = row.Plugin;
-        HealthFiles.ItemsSource = plugin?.Files.Select(f => new HealthFileRow(
-            $"{Labels.Format(f.Format)}  {Labels.Arch(f.Arch)}" + (f.Version.Length > 0 ? $"  {f.Version}" : ""), f.Path)).ToList();
+        HealthFiles.ItemsSource = HealthListing.Files(plugin);
         if (HealthFiles.Items.Count > 0)
             HealthFiles.SelectedIndex = 0;
         HealthFiles.Visibility = plugin != null ? Visibility.Visible : Visibility.Collapsed;
@@ -91,9 +79,7 @@ public partial class MainWindow
     {
         if (HealthGrid.SelectedItem is not HealthRow row)
             return;
-        OpenWebPage(row.Plugin is { } plugin
-            ? UpdateGuide.SearchUrl(plugin.Vendor, plugin.Name)
-            : UpdateGuide.SearchUrl(row.Title));
+        OpenWebPage(HealthListing.SearchUrl(row));
     }
 
     private void HealthLocate_Click(object sender, RoutedEventArgs e)
@@ -123,27 +109,5 @@ public partial class MainWindow
             HealthOpen_Click(sender, e);
     }
 
-    private string DescribeHealth()
-    {
-        var text = _health.NeedsAttention > 0 ? $"{_health.NeedsAttention} 款插件需要留意" : "没有影响使用的问题";
-        if (_health.UnmatchedBlacklistFiles > 0)
-            text += $"。宿主黑名单里另有 {_health.UnmatchedBlacklistFiles} 个文件不在扫描结果中，可能是音源或已卸载";
-        return text;
-    }
-
-}
-
-public sealed record HealthCategoryRow(string Title, string Explanation, int Count, HealthKind? Kind)
-{
-    public override string ToString() => $"{Title} {Count}";
-}
-
-public sealed record HealthRow(string Title, string Subtitle, string Detail, PluginRow? Plugin, VendorUpdate? Vendor)
-{
-    public override string ToString() => Title;
-}
-
-public sealed record HealthFileRow(string Summary, string Path)
-{
-    public override string ToString() => Path;
+    private string DescribeHealth() => HealthListing.Describe(_health);
 }
