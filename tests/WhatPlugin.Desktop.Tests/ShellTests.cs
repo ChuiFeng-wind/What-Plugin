@@ -156,7 +156,7 @@ public sealed class ShellTests : IDisposable
                 window.Navigate(page.Key);
                 var frame = window.CaptureRenderedFrame();
                 Assert.NotNull(frame);
-                frame.Save(Path.Combine(output ?? _dir, $"{palette.Id}-{page.Key}.png"));
+                frame.Save(Path.Combine(output ?? _dir, $"{palette.Id}-{page.Key}.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
             }
         }
         ThemeManager.Apply(null);

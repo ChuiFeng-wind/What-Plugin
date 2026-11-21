@@ -1,0 +1,168 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:core="clr-namespace:WhatPlugin.Core;assembly=WhatPlugin.Core"
+             x:Class="WhatPlugin.Desktop.PluginLibraryView">
+    <!-- 插件库和垃圾桶共用这一页，布局和 Windows 版的插件库一样：推荐栏、筛选行，下面是分类、列表和详情三栏。 -->
+    <Grid RowDefinitions="Auto,Auto,*" Margin="0,0,0,18">
+        <Border x:Name="RecommendBar" Classes="Card" Padding="4" Margin="0,0,0,12">
+            <DockPanel>
+                <Button x:Name="RecommendButton" DockPanel.Dock="Right" Content="推荐" Classes="Primary" Height="38" Padding="22,0" Margin="6,0,0,0"/>
+                <Button x:Name="ExitRecommendButton" DockPanel.Dock="Right" Content="退出推荐" Height="38" Margin="6,0,0,0" IsVisible="False"/>
+                <mi:MaterialIcon DockPanel.Dock="Left" Kind="AutoFix" Width="17" Height="17" Margin="12,0,4,0" Foreground="{DynamicResource Accent}"/>
+                <TextBox x:Name="NeedBox" Classes="Bare" AutomationProperties.Name="描述你需要的功能"
+                         PlaceholderText="描述你需要的功能，例如：人声去齿音、Waves 的压缩、低延迟的人声压缩、延迟 不要磁带"/>
+            </DockPanel>
+        </Border>
+
+        <Grid x:Name="FilterRow" Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="0,0,0,12">
+            <TextBox x:Name="SearchBox" PlaceholderText="搜索插件名、厂家、分类、标签或备注" AutomationProperties.Name="搜索插件名、厂家、分类、标签或备注"/>
+            <ComboBox x:Name="VendorFilter" Grid.Column="1" Width="140" Margin="8,0,0,0" AutomationProperties.Name="厂家筛选"/>
+            <ComboBox x:Name="FormatFilter" Grid.Column="2" Width="100" Margin="8,0,0,0" AutomationProperties.Name="格式筛选"/>
+            <ComboBox x:Name="RatingFilter" Grid.Column="3" Width="110" Margin="8,0,0,0" AutomationProperties.Name="评分筛选"/>
+            <Button x:Name="ClearFiltersButton" Grid.Column="4" Content="清除筛选" Classes="Ghost" Height="34" HorizontalAlignment="Left" Margin="6,0,0,0"/>
+        </Grid>
+
+        <Grid Grid.Row="2" ColumnDefinitions="176,14,*,14,372">
+            <Border x:Name="CategoryPanel" Classes="Card" Padding="8">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,*" Margin="0,0,0,8">
+                        <RadioButton x:Name="CategoryFunctionToggle" Classes="Segment" GroupName="CategoryMode" Content="功能分类" IsChecked="True" Margin="0,0,3,0"
+                                     ToolTip.Tip="按功能分类：EQ、压缩、混响…"/>
+                        <RadioButton x:Name="CategoryTimbreToggle" Grid.Column="1" Classes="Segment" GroupName="CategoryMode" Content="音色分类" Margin="3,0,0,0"
+                                     ToolTip.Tip="按音色分类：人声、鼓、吉他…"/>
+                    </Grid>
+                    <ListBox x:Name="CategoryList" Classes="Category" AutomationProperties.Name="分类">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="core:LibraryCategory">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Classes="Card" ClipToBounds="True">
+                <DockPanel>
+                    <Border x:Name="GridHeader" DockPanel.Dock="Top" Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Line}"/>
+                    <Panel>
+                        <ListBox x:Name="PluginList" Classes="Plugins" AutomationProperties.Name="插件列表"/>
+                        <StackPanel x:Name="PluginEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False">
+                            <mi:MaterialIcon Kind="PackageVariant" Width="36" Height="36" Foreground="{DynamicResource LineStrong}"/>
+                            <TextBlock x:Name="PluginEmptyText" Foreground="{DynamicResource Muted}" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Panel>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="4" Classes="Card">
+                <Panel>
+                    <StackPanel x:Name="EmptyHint" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <mi:MaterialIcon Kind="PackageVariant" Width="32" Height="32" Foreground="{DynamicResource LineStrong}"/>
+                        <TextBlock Text="选择一个插件，在这里记录使用感受" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                    </StackPanel>
+                    <ScrollViewer x:Name="DetailPanel" IsVisible="False" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="20,18,18,20">
+                            <TextBlock x:Name="DetailTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DetailMeta" Classes="SmallNote" Margin="0,3,0,0"/>
+
+                            <StackPanel x:Name="Stars" Orientation="Horizontal" Margin="-4,12,0,0"/>
+
+                            <DockPanel Margin="0,12,0,0">
+                                <Button x:Name="CompareCurrentButton" DockPanel.Dock="Right" Content="看同类" Classes="Ghost" Height="34" HorizontalAlignment="Right"
+                                        ToolTip.Tip="在左边选中这款插件所属的分类，和同类插件放在一起比较"/>
+                                <TextBlock x:Name="DetailUsage" Classes="SmallNote" VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <TextBlock Text="使用感受" Classes="FieldLabel"/>
+                            <TextBox x:Name="NoteBox" Classes="Multiline" Height="104" AutomationProperties.Name="使用感受" PlaceholderText="听感、适合的场景、踩过的坑…"/>
+                            <TextBlock Text="我的标签" Classes="FieldLabel"/>
+                            <TextBox x:Name="MyTagsBox" AutomationProperties.Name="我的标签" PlaceholderText="场景或自定义，用逗号分隔"/>
+
+                            <Grid ColumnDefinitions="*,10,*,10,*">
+                                <StackPanel>
+                                    <TextBlock Text="延迟" Classes="FieldLabel"/>
+                                    <ComboBox x:Name="MixLatency" AutomationProperties.Name="延迟">
+                                        <ComboBoxItem Content="未填"/><ComboBoxItem Content="无延迟"/><ComboBoxItem Content="低延迟"/><ComboBoxItem Content="高延迟"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="CPU 占用" Classes="FieldLabel"/>
+                                    <ComboBox x:Name="MixCpu" AutomationProperties.Name="CPU 占用">
+                                        <ComboBoxItem Content="未填"/><ComboBoxItem Content="轻"/><ComboBoxItem Content="中"/><ComboBoxItem Content="重"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="4">
+                                    <TextBlock Text="过采样" Classes="FieldLabel"/>
+                                    <ComboBox x:Name="MixOversampling" AutomationProperties.Name="过采样">
+                                        <ComboBoxItem Content="未填"/><ComboBoxItem Content="有"/><ComboBoxItem Content="没有"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,10,*,10,*">
+                                <StackPanel>
+                                    <TextBlock Text="线性相位" Classes="FieldLabel"/>
+                                    <ComboBox x:Name="MixLinearPhase" AutomationProperties.Name="线性相位">
+                                        <ComboBoxItem Content="未填"/><ComboBoxItem Content="有"/><ComboBoxItem Content="没有"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="侧链" Classes="FieldLabel"/>
+                                    <ComboBox x:Name="MixSidechain" AutomationProperties.Name="侧链">
+                                        <ComboBoxItem Content="未填"/><ComboBoxItem Content="有"/><ComboBoxItem Content="没有"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="混音属性靠手动填写。测量要运行插件，这个软件不运行插件。推荐时只排除填了且不符的。" Classes="SmallNote" Margin="0,6,0,0"/>
+
+                            <TextBlock Text="音色分类" Classes="FieldLabel"/>
+                            <WrapPanel x:Name="TimbreChips"/>
+                            <DockPanel>
+                                <Button x:Name="TagExpandButton" DockPanel.Dock="Right" Classes="Ghost" Height="30" HorizontalAlignment="Right" Margin="0,8,-10,0"/>
+                                <TextBlock Text="功能分类" Classes="FieldLabel"/>
+                            </DockPanel>
+                            <TextBlock x:Name="TagChipsEmpty" Text="还没有分类，点“编辑分类”选择" Classes="SmallNote" IsVisible="False"/>
+                            <WrapPanel x:Name="TagChips"/>
+                            <DockPanel x:Name="NewTagPanel" Margin="0,6,0,0">
+                                <Button x:Name="AddTagButton" DockPanel.Dock="Right" Content="添加" Margin="6,0,0,0"/>
+                                <TextBox x:Name="NewTagBox" AutomationProperties.Name="添加新的功能分类" PlaceholderText="添加新的分类"/>
+                            </DockPanel>
+
+                            <Border Height="1" Background="{DynamicResource Line}" Margin="0,14,0,0"/>
+                            <Grid ColumnDefinitions="*,10,*,10,*">
+                                <StackPanel>
+                                    <TextBlock Text="厂家" Classes="FieldLabel"/>
+                                    <TextBox x:Name="VendorBox" AutomationProperties.Name="厂家"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="类型" Classes="FieldLabel"/>
+                                    <ComboBox x:Name="KindBox" AutomationProperties.Name="类型">
+                                        <ComboBoxItem Content="效果器"/><ComboBoxItem Content="未知"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="4">
+                                    <TextBlock Text="获取方式" Classes="FieldLabel"/>
+                                    <ComboBox x:Name="PurchaseKindBox" AutomationProperties.Name="获取方式"
+                                              ToolTip.Tip="免费、已购还是其他方式得到的（例如捆绑赠送）。只能手动标，默认未标记。选“已购”会自动加到“已购账号”里">
+                                        <ComboBoxItem Content="未标记"/><ComboBoxItem Content="免费"/><ComboBoxItem Content="已购"/><ComboBoxItem Content="其他"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                            <Button x:Name="ResetButton" Content="恢复自动分类、音色和厂家" Classes="Ghost" Height="34" HorizontalAlignment="Left" Margin="-10,8,0,0"/>
+
+                            <Border Height="1" Background="{DynamicResource Line}" Margin="0,14,0,0"/>
+                            <TextBlock Text="移入原因（选填）" Classes="FieldLabel"/>
+                            <TextBox x:Name="ReasonBox" Classes="Multiline" MinHeight="34" MaxHeight="80" AutomationProperties.Name="移入原因"/>
+                            <Button x:Name="BlacklistButton" Classes="Danger" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                            <TextBlock Text="移入垃圾桶只是在本软件中隐藏，文件不动，DAW 里仍可使用。" Classes="SmallNote" Margin="0,8,0,0"/>
+                            <TextBlock x:Name="DetailFiles" Classes="SmallNote" Margin="0,8,0,0" IsVisible="False"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Panel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

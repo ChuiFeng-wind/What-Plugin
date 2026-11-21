@@ -88,7 +88,5 @@ public sealed class IdleViewModel(IdlePlugin idle)
 
 public static class UsageLabels
 {
-    public static string Summary(PluginUsage? usage) => usage == null
-        ? "工程里没用过"
-        : $"{usage.Projects} 个工程，最近 {usage.LastUsedUtc.ToLocalTime():yyyy-MM-dd}";
+    public static string Summary(PluginUsage? usage) => PluginLabels.UsageSummary(usage);
 }

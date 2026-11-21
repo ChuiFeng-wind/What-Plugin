@@ -27,7 +27,6 @@ public partial class MainWindow : Window
     private const string Unrated = "未评分";
     private const string HasNote = "有备注";
 
-    private static readonly char[] TagSeparators = [',', '，', '、', ';', '；'];
     private static readonly PluginKind[] Kinds = [PluginKind.Effect, PluginKind.Unknown];
 
     private readonly PluginDatabase _database;
@@ -184,7 +183,7 @@ public partial class MainWindow : Window
 
         var blacklist = _page == AppPage.Blacklist;
         PluginPageTitle.Text = blacklist ? "垃圾桶" : "插件库";
-        PluginPageSubtitle.Text = blacklist ? "垃圾桶里的插件只在本软件中隐藏，点“卸载”才会动文件" : "已安装的效果器，不含音源";
+        PluginPageSubtitle.Text = blacklist ? LibraryText.TrashSubtitle : "已安装的效果器，不含音源";
         RecommendBar.Visibility = blacklist ? Visibility.Collapsed : Visibility.Visible;
         TrashBar.Visibility = blacklist ? Visibility.Visible : Visibility.Collapsed;
         PluginGrid.SelectionMode = blacklist ? DataGridSelectionMode.Extended : DataGridSelectionMode.Single;
@@ -331,18 +330,13 @@ public partial class MainWindow : Window
         CountPlugins.Text = (_plugins.Count - blacklisted).ToString();
         CountBlacklist.Text = blacklisted > 0 ? blacklisted.ToString() : "";
         UpdatePluginEmpty(shown);
-        StatusText.Text = _plugins.Count == 0
-            ? "还没有数据，到左下方“设置”里扫描插件。"
-            : $"效果器 {_plugins.Count - blacklisted} 款，垃圾桶 {blacklisted} 款，当前显示 {shown} 款";
+        StatusText.Text = LibraryText.Status(_plugins.Count, blacklisted, shown);
     }
 
     private void UpdatePluginEmpty(int shown)
     {
         PluginEmpty.Visibility = shown == 0 ? Visibility.Visible : Visibility.Collapsed;
-        PluginEmptyText.Text = _need != null ? "没有找到匹配的插件"
-            : InBlacklistView && !_plugins.Any(p => p.IsBlacklisted) ? "垃圾桶是空的"
-            : _plugins.Count == 0 ? "还没有数据，到左下方“设置”里扫描插件"
-            : "没有符合筛选的插件";
+        PluginEmptyText.Text = LibraryText.Empty(_need != null, InBlacklistView, _plugins.Count, _plugins.Count(p => p.IsBlacklisted));
     }
 
     // ---------- 推荐 ----------
@@ -422,38 +416,7 @@ public partial class MainWindow : Window
         UpdateCount();
     }
 
-    private static string DescribeRecommendation(RecommendResult result)
-    {
-        var parts = new List<string>();
-        if (result.Understood.Count > 0)
-            parts.Add("需求：" + string.Join("、", result.Understood));
-        if (result.Vendors.Count > 0)
-            parts.Add("厂家：" + string.Join("、", result.Vendors));
-        if (result.Excluded.Count > 0)
-            parts.Add("排除：" + string.Join("、", result.Excluded));
-        if (result.NotUnderstood.Count > 0)
-            parts.Add("没有理解：" + string.Join("、", result.NotUnderstood));
-
-        if (result.NoPluginFor is { Count: > 0 } missing)
-            parts.Add("当前列表中没有对应：" + string.Join("、", missing));
-        if (result.AttributeHint != null)
-            parts.Add(result.AttributeHint);
-
-        var nothingUnderstood = result.Understood.Count == 0 && result.Vendors.Count == 0;
-        string outcome;
-        if (result.TotalMatches == 0)
-        {
-            outcome = nothingUnderstood
-                ? "没有找到匹配的插件，可以换个说法，例如：压缩、EQ、混响、去齿音、人声、磁带饱和"
-                : "已安装的效果器中没有符合的（本软件不包含音源）";
-        }
-        else
-        {
-            outcome = $"找到 {result.TotalMatches} 款，最相关的排在最前";
-        }
-        parts.Add(outcome);
-        return string.Join("  |  ", parts);
-    }
+    private static string DescribeRecommendation(RecommendResult result) => LibraryText.DescribeRecommendation(result);
 
     // ---------- 编辑面板 ----------
 
@@ -741,8 +704,7 @@ public partial class MainWindow : Window
         RebuildTimbreChips();
     }
 
-    private static List<string> SplitTags(string text) =>
-        text.Split(TagSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    private static List<string> SplitTags(string text) => PluginEdits.SplitTags(text);
 
     private PluginUserData ReadPanel(PluginRow row)
     {

@@ -10,13 +10,13 @@ public sealed class PluginViewModel(PluginRow row) : INotifyPropertyChanged
 
     public PluginRow Row { get; private set; } = row;
     public string Name => Row.Name;
-    public string Vendor => Row.Vendor.Length > 0 ? Row.Vendor : "未知";
+    public string Vendor => PluginLabels.Vendor(Row);
     public string KindText => Labels.Kind(Row.Kind);
-    public string TagsText => Row.Tags.Count > 0 ? string.Join("、", Row.Tags) : "未分类";
-    public IReadOnlyList<string> TagList => Row.Tags.Count > 0 ? Row.Tags : ["未分类"];
+    public string TagsText => PluginLabels.Tags(Row);
+    public IReadOnlyList<string> TagList => PluginLabels.TagList(Row);
     public string TimbresText => string.Join("、", Row.Timbres);
     public int Rating => Row.User.Rating;
-    public string RatingText => Rating > 0 ? new string('★', Rating) : "";
+    public string RatingText => PluginLabels.Rating(Rating);
     public string MyTagsText => string.Join("、", Row.User.MyTags);
     public string FormatsText => Row.IsMissing ? "文件缺失" : string.Join(" / ", Row.Files.Select(f => Labels.Format(f.Format)).Distinct());
 
@@ -44,8 +44,7 @@ public sealed class PluginViewModel(PluginRow row) : INotifyPropertyChanged
     /// <summary>最近一次推荐给出的理由，只在推荐结果里显示。</summary>
     public string RecommendReason { get; set; } = "";
 
-    public string SearchText => string.Join(' ',
-        Row.Name, Row.Vendor, string.Join(' ', Row.Tags), string.Join(' ', Row.Timbres), string.Join(' ', Row.User.MyTags), Row.User.Note, Row.User.BlacklistReason, Row.User.Mix?.SearchText ?? "").ToLowerInvariant();
+    public string SearchText => PluginLabels.SearchText(Row);
 
     public void Update(PluginRow row)
     {
@@ -54,49 +53,12 @@ public sealed class PluginViewModel(PluginRow row) : INotifyPropertyChanged
     }
 }
 
+/// <summary>转调 Core 里的 <see cref="PluginLabels"/>，跨平台版用同一份文字。</summary>
 public static class Labels
 {
-    public static string Kind(PluginKind kind) => kind switch
-    {
-        PluginKind.Effect => "效果器",
-        PluginKind.Instrument => "音源",
-        _ => "未知",
-    };
-
-    public static string Format(PluginFormat format) => format switch
-    {
-        PluginFormat.Vst3 => "VST3",
-        PluginFormat.Vst2 => "VST2",
-        PluginFormat.Clap => "CLAP",
-        PluginFormat.Aax => "AAX",
-        PluginFormat.Au => "AU",
-        _ => format.ToString(),
-    };
-
-    public static string Arch(Arch arch) => arch switch
-    {
-        Core.Arch.X64 => "64 位",
-        Core.Arch.X86 => "32 位",
-        Core.Arch.Arm64 => "ARM64",
-        _ => "架构未知",
-    };
-
-    public static string Status(ScanStatus status) => status switch
-    {
-        ScanStatus.Loaded => "已读取插件清单",
-        ScanStatus.ModuleInfo => "读取自模块信息",
-        ScanStatus.FileInfoOnly => "仅文件信息",
-        ScanStatus.LoadFailed => "读取失败",
-        ScanStatus.TimedOut => "读取超时",
-        _ => status.ToString(),
-    };
-
-    public static string TagSource(ClassificationSource source) => source switch
-    {
-        ClassificationSource.Manual => "分类由你手动修改",
-        ClassificationSource.Seed => "分类来自资料库",
-        ClassificationSource.SdkCategory => "分类来自插件自身",
-        ClassificationSource.NameKeyword => "分类由名称推测，待确认",
-        _ => "暂无分类信息",
-    };
+    public static string Kind(PluginKind kind) => PluginLabels.Kind(kind);
+    public static string Format(PluginFormat format) => PluginLabels.Format(format);
+    public static string Arch(Arch arch) => PluginLabels.Arch(arch);
+    public static string Status(ScanStatus status) => PluginLabels.Status(status);
+    public static string TagSource(ClassificationSource source) => PluginLabels.TagSource(source);
 }

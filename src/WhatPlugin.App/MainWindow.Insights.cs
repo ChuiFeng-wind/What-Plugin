@@ -115,15 +115,12 @@ public partial class MainWindow
             return;
         if (SelectedCategory is not { } category)
         {
-            PluginPageSubtitle.Text = "已安装的效果器，不含音源。左边选一个分类，就能把同类插件放在一起比较";
+            PluginPageSubtitle.Text = LibraryText.DefaultSubtitle;
             return;
         }
         var rows = _plugins.Where(p => InCurrentView(p) && category.Matches(p.Row))
             .Select(p => new ComparisonRow(p.Row, p.Usage)).ToList();
-        var summary = PluginComparison.Summarize(rows, DateTime.UtcNow);
-        PluginPageSubtitle.Text = _report.Projects.Count == 0
-            ? $"“{category.Label}”共 {summary.Total} 款，{summary.Unrated} 款未评分。到“工程”页扫描后可以看到使用情况"
-            : $"“{category.Label}”共 {summary.Total} 款，过去一年用过 {summary.UsedRecently} 款，工程里从没用过 {summary.NeverUsed} 款，{summary.Unrated} 款未评分";
+        PluginPageSubtitle.Text = LibraryText.CategorySummary(category, rows, _report.Projects.Count > 0, DateTime.UtcNow);
     }
 
     /// <summary>窗口窄的时候先收起线性相位和侧链两列，插件名和备注要留够宽度。</summary>
@@ -145,10 +142,7 @@ public partial class MainWindow
             return;
         SaveCurrent();
         var row = _current.Row;
-        var owned = PluginComparison.Categories(_plugins.Select(p => p.Row));
-        var category = row.Tags.Count > 0
-            ? new LibraryCategory(LibraryCategoryKind.Function, PurchaseAdvisor.NarrowestTag(row.Tags, owned), 0)
-            : new LibraryCategory(LibraryCategoryKind.NoFunction, LibraryCategories.NoFunctionLabel, 0);
+        var category = LibraryText.CompareCategory(row, _plugins.Select(p => p.Row));
         var plugin = _current;
         SearchBox.Text = "";
         SelectCategory(category);

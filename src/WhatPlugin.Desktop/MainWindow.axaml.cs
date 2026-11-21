@@ -62,7 +62,7 @@ public partial class MainWindow : Window
         RefreshCounts();
 
         Navigate("Plugins");
-        StatusText.Text = "就绪";
+        Closing += (_, _) => Library(CurrentPage)?.SaveCurrent();
     }
 
     /// <summary>状态栏上的文字（测试检查用）。</summary>
@@ -171,6 +171,8 @@ public partial class MainWindow : Window
     {
         if (CurrentPage == key)
             return;
+        // 离开插件库时把还在等待自动保存的内容写进去。
+        Library(CurrentPage)?.SaveCurrent();
         CurrentPage = key;
         _navItems[key].IsChecked = true;
         if (!_pages.TryGetValue(key, out var page))
@@ -181,7 +183,13 @@ public partial class MainWindow : Window
         }
         foreach (var other in _pages.Values)
             other.IsVisible = other == page;
+        // 插件库和垃圾桶各是一页，在一页里移入或恢复后，另一页显示时要重新读。
+        Library(key)?.Load();
     }
+
+    /// <summary>插件库或垃圾桶页面；别的页面返回 null。</summary>
+    public PluginLibraryView? Library(string key) =>
+        _pages.GetValueOrDefault(key) is PageFrame { Content: PluginLibraryView view } ? view : null;
 
     private Control CreatePage(string key)
     {
@@ -192,6 +200,15 @@ public partial class MainWindow : Window
             return new PageFrame(SettingsPage.Label, SettingsPage.Subtitle, settings);
         }
         var definition = Pages.First(p => p.Key == key);
+        if (key is "Plugins" or "Blacklist")
+        {
+            var library = new PluginLibraryView(_database, blacklist: key == "Blacklist");
+            var frame = new PageFrame(definition.Label, definition.Subtitle, library);
+            library.SubtitleChanged += text => frame.Subtitle = text;
+            library.StatusChanged += text => StatusText.Text = text;
+            library.CountsChanged += RefreshCounts;
+            return frame;
+        }
         return new PageFrame(definition.Label, definition.Subtitle, new PendingView(definition.Stage));
     }
 
