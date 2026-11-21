@@ -1,6 +1,7 @@
 namespace WhatPlugin.Core;
 
-public enum PluginFormat { Vst3, Vst2, Clap, Aax }
+/// <summary>数据库里按编号存，新格式只能加在最后。AU 只有 Mac 上有。</summary>
+public enum PluginFormat { Vst3, Vst2, Clap, Aax, Au }
 
 public enum Arch { Unknown, X64, X86, Arm64 }
 

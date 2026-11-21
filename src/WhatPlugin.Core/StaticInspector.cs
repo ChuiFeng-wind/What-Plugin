@@ -23,6 +23,18 @@ public static class StaticInspector
         if (!Directory.Exists(path))
             return null;
 
+        // Mac 插件包：Info.plist 里写着程序文件名，在 Contents/MacOS 下。
+        var macOS = Path.Combine(path, "Contents", "MacOS");
+        if (Directory.Exists(macOS))
+        {
+            if (ReadBundleInfo(path)?.ExecutablePath(path) is { } executable && File.Exists(executable))
+                return executable;
+            var named = Path.Combine(macOS, Path.GetFileNameWithoutExtension(path));
+            if (File.Exists(named))
+                return named;
+            return Directory.GetFiles(macOS).FirstOrDefault();
+        }
+
         var extension = format switch
         {
             PluginFormat.Aax => ".aaxplugin",
@@ -49,6 +61,12 @@ public static class StaticInspector
         var binary = ResolveBinary(path, format);
         if (binary == null)
             return Arch.Unknown;
+
+        // Mac 程序文件。通用二进制里同时有几种架构时，取本机能直接加载的那种。
+        var macArchs = MachO.Architectures(binary);
+        if (macArchs.Count > 0)
+            return macArchs.Contains(NativeArch) ? NativeArch : macArchs[0];
+
         try
         {
             using var stream = File.OpenRead(binary);
@@ -66,6 +84,59 @@ public static class StaticInspector
             return Arch.Unknown;
         }
     }
+
+    /// <summary>本机进程的架构。</summary>
+    public static Arch NativeArch => System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture switch
+    {
+        System.Runtime.InteropServices.Architecture.X64 => Arch.X64,
+        System.Runtime.InteropServices.Architecture.Arm64 => Arch.Arm64,
+        System.Runtime.InteropServices.Architecture.X86 => Arch.X86,
+        _ => Arch.Unknown,
+    };
+
+    /// <summary>
+    /// 扫描器能不能加载这个架构。Windows 版扫描器是 64 位 Intel 的；
+    /// Mac 版是通用二进制，按本机架构运行，只能加载同架构的插件。
+    /// </summary>
+    public static bool ScannerCanLoad(Arch arch) =>
+        arch == Arch.Unknown || arch == (AppPlatform.IsMac ? NativeArch : Arch.X64);
+
+    /// <summary>Mac 插件包的 Info.plist；不是插件包或读不了时返回 null。</summary>
+    public static MacBundleInfo? ReadBundleInfo(string bundlePath)
+    {
+        try
+        {
+            return Directory.Exists(bundlePath) ? MacBundleInfo.Read(bundlePath) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or System.Xml.XmlException or InvalidCastException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// AU 插件包里登记的插件（Info.plist 的 AudioComponents）。不加载插件。
+    /// 没有登记的老式 AU 返回 null，只能记文件信息。
+    /// </summary>
+    public static IReadOnlyList<PluginClassInfo>? ReadAudioUnits(string bundlePath)
+    {
+        var info = ReadBundleInfo(bundlePath);
+        if (info == null || info.AudioUnits.Count == 0)
+            return null;
+        return info.AudioUnits
+            .Select(unit => new PluginClassInfo(
+                unit.Name,
+                unit.Vendor,
+                unit.Version is { } v ? AudioUnitVersion(v) : info.Version ?? "",
+                unit.IsInstrument ? "Instrument" : unit.Type == "aumi" ? "" : "Fx",
+                unit.Type == "aumi" ? null : unit.IsInstrument,
+                InfoSource.ModuleInfo))
+            .ToList();
+    }
+
+    /// <summary>AU 的版本号按 0xMMMMmmbb 存（主版本、次版本、修订）。</summary>
+    public static string AudioUnitVersion(long version) =>
+        $"{(version >> 16) & 0xFFFF}.{(version >> 8) & 0xFF}.{version & 0xFF}";
 
     public static bool LooksLikeVst2(string dllPath) => ReadExportNames(dllPath).Any(Vst2EntryPoints.Contains);
 
@@ -215,6 +286,10 @@ public static class StaticInspector
                 // 读不到版本信息时保留文件名结果。
             }
         }
+
+        // Mac 插件包的程序文件里没有 Windows 那样的版本信息，版本写在 Info.plist 里。
+        if (version.Length == 0 && ReadBundleInfo(target.Path)?.Version is { } bundleVersion)
+            version = bundleVersion.Trim();
 
         if (vendor.Length == 0)
             vendor = VendorFromFolder(target.Path, target.Root);

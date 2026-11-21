@@ -26,3 +26,108 @@ jobs:
           dotnet-version: 10.0.x
       # Windows 上测 Windows 版和跨平台版两份；Mac 上只有跨平台版，Windows 专用的测试会显示为跳过。
       - run: dotnet test tests/WhatPlugin.Tests --nologo
+
+  # Mac 命令行版从头到尾走一遍：编扫描器（通用二进制）、编 SDK 自带的示例插件、
+  # 发布命令行工具，再用临时数据库扫一个临时插件目录，检查结果。
+  mac-e2e:
+    if: github.repository == 'ChuiFeng-wind/What-Plugin' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    env:
+      SDK: ${{ github.workspace }}/../vst3sdk
+      WORK: ${{ github.workspace }}/../e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: 取 VST3 SDK（和 Windows 版用的同一版本）
+        run: git clone --quiet --depth 1 --branch v3.8.1_build_84 --recurse-submodules --shallow-submodules https://github.com/steinbergmedia/vst3sdk.git "$SDK"
+
+      - name: 编译扫描器
+        run: |
+          cmake -S scanner -B build/scanner -DCMAKE_BUILD_TYPE=Release -DVST3_SDK="$SDK"
+          cmake --build build/scanner --parallel
+          scanner=build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner
+          lipo -archs "$scanner"
+          lipo -archs "$scanner" | grep -q arm64
+          lipo -archs "$scanner" | grep -q x86_64
+          codesign --verify --verbose "$scanner"
+
+      - name: 编译示例插件 AGain
+        run: |
+          cmake -S "$SDK" -B "$WORK/sdk-build" -DCMAKE_BUILD_TYPE=Release \
+            -DSMTG_CREATE_PLUGIN_LINK=OFF -DSMTG_RUN_VST_VALIDATOR=OFF \
+            -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_AUV2_BUILDS=OFF
+          cmake --build "$WORK/sdk-build" --target again --parallel
+
+      - name: 发布命令行工具（Apple 芯片和 Intel 各一份）
+        run: |
+          for rid in osx-arm64 osx-x64; do
+            dotnet publish src/WhatPlugin.Cli -c Release -r $rid --self-contained true -o "$WORK/cli-$rid" -nologo
+            test -x "$WORK/cli-$rid/WhatPluginScanner"
+          done
+          file "$WORK/cli-osx-x64/WhatPlugin.Cli" | grep -q x86_64
+
+      - name: 摆出测试用的插件目录
+        run: |
+          root="$WORK/plugins"
+          mkdir -p "$root"
+          again=$(find "$WORK/sdk-build" -name again.vst3 -type d -prune | head -1)
+          echo "示例插件：$again"
+          # 扫描器直接读原版。
+          build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner "$again" "$WORK/direct.json"
+          cat "$WORK/direct.json"
+          grep -q '"AGain VST3"' "$WORK/direct.json"
+          # 放进目录的那份去掉 moduleinfo.json，命令行扫描时就必须真的加载它。
+          cp -R "$again" "$root/again.vst3"
+          rm -f "$root/again.vst3/Contents/Resources/moduleinfo.json"
+          # 改了插件包里的文件，重新做一次临时签名（和用户自己改过插件包后要做的一样）。
+          codesign --force --deep --sign - "$root/again.vst3"
+          # 一个假的 AU：只有 Info.plist 和一个系统自带的程序文件，扫描时不会被加载。
+          au="$root/FakeComp.component/Contents"
+          mkdir -p "$au/MacOS"
+          cp /usr/bin/true "$au/MacOS/FakeComp"
+          cat > "$au/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>FakeComp</string>
+            <key>CFBundleShortVersionString</key><string>2.1.0</string>
+            <key>AudioComponents</key><array><dict>
+              <key>name</key><string>Example Audio: FakeComp</string>
+              <key>type</key><string>aufx</string>
+              <key>subtype</key><string>fkcp</string>
+              <key>manufacturer</key><string>ExAu</string>
+              <key>version</key><integer>131328</integer>
+            </dict></array>
+          </dict></plist>
+          PLIST
+          plutil -convert binary1 "$au/Info.plist"
+
+      - name: 用命令行工具扫描并检查结果
+        run: |
+          cli="$WORK/cli-osx-arm64/WhatPlugin.Cli"
+          db="$WORK/e2e.db"
+          "$cli" discover --root "$WORK/plugins"
+          "$cli" scan --root "$WORK/plugins" --db "$db" --full
+          "$cli" list --db "$db" | tee "$WORK/list.txt"
+          # 列：厂家、名称、类型、分类、分类来源、格式、状态
+          awk -F'\t' '$2 == "AGain VST3" && $6 == "Vst3" && $7 == "Loaded"' "$WORK/list.txt" | grep -q .
+          awk -F'\t' '$1 == "Example Audio" && $2 == "FakeComp" && $3 == "Effect" && $6 == "Au" && $7 == "ModuleInfo"' "$WORK/list.txt" | grep -q .
+          # 数据库只写在指定的位置，没有碰默认位置。
+          test ! -e "$HOME/Library/Application Support/WhatPlugin/plugins.db"
+
+      # 测试都通过后，把 Apple 芯片的命令行工具和扫描器打成一个包，给离线的 Mac 拷过去用。
+      # 用 tar.gz：zip 会丢掉程序的可执行权限。
+      - name: 打包 Apple 芯片版
+        run: |
+          pkg="$WORK/WhatPlugin-mac-arm64"
+          cp -R "$WORK/cli-osx-arm64" "$pkg"
+          cp LICENSE "$pkg/LICENSE.txt"
+          tar -czf "$WORK/WhatPlugin-mac-arm64.tar.gz" -C "$WORK" WhatPlugin-mac-arm64
+          cp "$WORK/WhatPlugin-mac-arm64.tar.gz" "$GITHUB_WORKSPACE/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WhatPlugin-mac-arm64
+          path: WhatPlugin-mac-arm64.tar.gz
+          retention-days: 14

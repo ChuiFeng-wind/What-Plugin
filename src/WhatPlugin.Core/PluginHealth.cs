@@ -148,6 +148,7 @@ public static class PluginHealth
         PluginFormat.Vst2 => "VST2",
         PluginFormat.Clap => "CLAP",
         PluginFormat.Aax => "AAX",
+        PluginFormat.Au => "AU",
         _ => format.ToString(),
     };
 }

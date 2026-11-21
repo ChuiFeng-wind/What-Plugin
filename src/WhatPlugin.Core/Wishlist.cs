@@ -94,14 +94,17 @@ public sealed record UpsertResult(int Added, int Updated, IReadOnlyList<string>?
 public sealed record LoginAssignment(IReadOnlyList<string> NewPlatforms, int Shared, int Own);
 
 /// <summary>
-/// 用系统自带的、绑定当前用户的保护加密，所以不需要另设主密码：Windows 是 DPAPI（见 <see cref="WindowsSecretBackend"/>）。
+/// 用系统自带的、绑定当前用户的保护加密，所以不需要另设主密码：Windows 是 DPAPI（见 <see cref="WindowsSecretBackend"/>），
+/// Mac 是钥匙串里的密钥（见 <see cref="MacKeychainSecretBackend"/>）。
 /// 换账号或重装系统后无法解开，迁移要靠“导出账号”。
 /// </summary>
 public static class SecretProtector
 {
     /// <summary>当前平台的加密方式。测试可以换成别的。</summary>
     public static ISecretBackend Backend { get; set; } =
-        OperatingSystem.IsWindows() ? new WindowsSecretBackend() : new UnsupportedSecretBackend();
+        OperatingSystem.IsWindows() ? new WindowsSecretBackend()
+        : OperatingSystem.IsMacOS() ? new MacKeychainSecretBackend()
+        : new UnsupportedSecretBackend();
 
     public static byte[] Protect(string secret) => Backend.Protect(Encoding.UTF8.GetBytes(secret));
 

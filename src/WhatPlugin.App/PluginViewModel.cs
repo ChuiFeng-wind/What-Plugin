@@ -69,6 +69,7 @@ public static class Labels
         PluginFormat.Vst2 => "VST2",
         PluginFormat.Clap => "CLAP",
         PluginFormat.Aax => "AAX",
+        PluginFormat.Au => "AU",
         _ => format.ToString(),
     };
 

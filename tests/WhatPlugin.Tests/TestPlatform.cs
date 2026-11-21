@@ -14,6 +14,16 @@ public sealed class WindowsFactAttribute : FactAttribute
     }
 }
 
+/// <summary>只在 Mac 上有意义的测试（钥匙串）。</summary>
+public sealed class MacFactAttribute : FactAttribute
+{
+    public MacFactAttribute()
+    {
+        if (!OperatingSystem.IsMacOS())
+            Skip = "只在 Mac 上运行";
+    }
+}
+
 /// <inheritdoc cref="WindowsFactAttribute"/>
 public sealed class WindowsTheoryAttribute : TheoryAttribute
 {
@@ -42,8 +52,8 @@ public static class TestPaths
 internal static class TestPlatform
 {
     /// <summary>
-    /// Mac 上的钥匙串还没接上。为了让心愿单等用到加密的逻辑照样能测，非 Windows 上换成测试用的可逆加密。
-    /// Windows 上不动，测的就是真正的 DPAPI。
+    /// 其他测试不能碰用户（或测试机）的默认钥匙串，所以非 Windows 上换成测试用的可逆加密。
+    /// Windows 上不动，测的就是真正的 DPAPI；Mac 的钥匙串由 MacKeychainTests 用临时钥匙串单独测。
     /// </summary>
     [ModuleInitializer]
     internal static void UseTestSecretsOffWindows()

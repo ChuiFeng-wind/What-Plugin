@@ -30,7 +30,7 @@ public static class AppPlatform
     {
         if (IsMac)
         {
-            // 系统级和当前用户级各一份。AU（Components）要等加了 AU 格式后再列进来。
+            // 系统级和当前用户级各一份。
             var roots = new List<(string, PluginFormat)>();
             foreach (var library in new[] { "/Library", Path.Combine(Home, "Library") })
             {
@@ -38,6 +38,7 @@ public static class AppPlatform
                 roots.Add((Path.Combine(plugIns, "VST3"), PluginFormat.Vst3));
                 roots.Add((Path.Combine(plugIns, "VST"), PluginFormat.Vst2));
                 roots.Add((Path.Combine(plugIns, "CLAP"), PluginFormat.Clap));
+                roots.Add((Path.Combine(plugIns, "Components"), PluginFormat.Au));
             }
             roots.Add(("/Library/Application Support/Avid/Audio/Plug-Ins", PluginFormat.Aax));
             return roots;
@@ -112,7 +113,7 @@ public sealed class WindowsSecretBackend : ISecretBackend
     public byte[] Unprotect(byte[] protectedBytes) => ProtectedData.Unprotect(protectedBytes, Entropy, DataProtectionScope.CurrentUser);
 }
 
-/// <summary>还没有实现的平台（Mac 下一阶段接钥匙串）。不提供不安全的替代：保存密码时直接报错，读取时当作解不开。</summary>
+/// <summary>还没有实现的平台（Windows 和 Mac 以外）。不提供不安全的替代：保存密码时直接报错，读取时当作解不开。</summary>
 public sealed class UnsupportedSecretBackend : ISecretBackend
 {
     public byte[] Protect(byte[] plain) =>

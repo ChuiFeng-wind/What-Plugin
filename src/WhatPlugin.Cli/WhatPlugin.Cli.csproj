@@ -1,21 +1,28 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- 命令行工具 Windows 和 Mac 共用。只在 Windows 上有的功能由 Core 里的平台标注管着。 -->
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <Version>1.3.2</Version>
     <Product>WhatPlugin</Product>
     <Company>WhatPlugin</Company>
     <ImplicitUsings>enable</ImplicitUsings>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- 调用只在 Windows 上有的接口而没有判断平台时，编译直接失败。 -->
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WhatPlugin.Core\WhatPlugin.Core.csproj" />
   </ItemGroup>
+  <!-- 扫描器放在命令行工具旁边。Windows 上叫 WhatPluginScanner.exe，Mac 上没有扩展名。 -->
   <ItemGroup Condition="Exists('..\..\build\scanner\Release\WhatPluginScanner.exe')">
     <None Include="..\..\build\scanner\Release\WhatPluginScanner.exe" Link="WhatPluginScanner.exe" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="Exists('..\..\build\scanner\WhatPluginScanner_artefacts\Release\WhatPluginScanner.exe')">
     <None Include="..\..\build\scanner\WhatPluginScanner_artefacts\Release\WhatPluginScanner.exe" Link="WhatPluginScanner.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('../../build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner')">
+    <None Include="../../build/scanner/WhatPluginScanner_artefacts/Release/WhatPluginScanner" Link="WhatPluginScanner" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

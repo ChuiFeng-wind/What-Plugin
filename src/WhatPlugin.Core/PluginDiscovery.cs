@@ -64,6 +64,11 @@ public static class PluginDiscovery
                 results.TryAdd(sub, new ScanTarget(sub, PluginFormat.Aax, root, StaticInspector.DetectArch(sub, PluginFormat.Aax)));
             else if (ext.Equals(".clap", StringComparison.OrdinalIgnoreCase))
                 results.TryAdd(sub, new ScanTarget(sub, PluginFormat.Clap, root, StaticInspector.DetectArch(sub, PluginFormat.Clap)));
+            // Mac 的 AU 和 VST2 也是插件包（文件夹）。
+            else if (ext.Equals(".component", StringComparison.OrdinalIgnoreCase))
+                results.TryAdd(sub, new ScanTarget(sub, PluginFormat.Au, root, StaticInspector.DetectArch(sub, PluginFormat.Au)));
+            else if (ext.Equals(".vst", StringComparison.OrdinalIgnoreCase))
+                results.TryAdd(sub, new ScanTarget(sub, PluginFormat.Vst2, root, StaticInspector.DetectArch(sub, PluginFormat.Vst2)));
             else
                 Walk(sub, root, format, results);
         }

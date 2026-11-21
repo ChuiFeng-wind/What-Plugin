@@ -173,4 +173,107 @@ public sealed class MacBundleTests : IDisposable
             """;
         Assert.Equal("ok", PropertyList.Read(Encoding.UTF8.GetBytes(xml)));
     }
+
+    // ---------- 发现和静态信息：在临时目录里摆出 Mac 的插件目录结构 ----------
+
+    private static readonly byte[] ThinX64 = [0xCF, 0xFA, 0xED, 0xFE, 0x07, 0x00, 0x00, 0x01, 0x03, 0, 0, 0];
+
+    private static byte[] Universal()
+    {
+        var fat = new List<byte> { 0xCA, 0xFE, 0xBA, 0xBE, 0, 0, 0, 2 };
+        fat.AddRange([0x01, 0, 0, 0x07, 0, 0, 0, 3, 0, 0, 0x40, 0, 0, 0, 0x10, 0, 0, 0, 0, 14]);
+        fat.AddRange([0x01, 0, 0, 0x0C, 0, 0, 0, 0, 0, 0, 0x80, 0, 0, 0, 0x10, 0, 0, 0, 0, 14]);
+        return [.. fat];
+    }
+
+    private static string Plist(string executable, string version) => $"""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>{executable}</string>
+            <key>CFBundleShortVersionString</key><string>{version}</string>
+        </dict></plist>
+        """;
+
+    private string Bundle(string relative, byte[] plist, string executable, byte[] binary)
+    {
+        var bundle = Path.Combine(_dir, relative);
+        Directory.CreateDirectory(Path.Combine(bundle, "Contents", "MacOS"));
+        File.WriteAllBytes(Path.Combine(bundle, "Contents", "Info.plist"), plist);
+        File.WriteAllBytes(Path.Combine(bundle, "Contents", "MacOS", executable), binary);
+        return bundle;
+    }
+
+    [Fact]
+    public void Discovery_FindsMacBundlesAndTheirArchitecture()
+    {
+        var au = Bundle(Path.Combine("Components", "FakeComp.component"), Sample("xml"), "FakeComp", Universal());
+        var vst2 = Bundle(Path.Combine("VST", "厂家", "Old.vst"), Encoding.UTF8.GetBytes(Plist("OldBin", "1.2")), "OldBin", ThinX64);
+        var vst3 = Bundle(Path.Combine("VST3", "New.vst3"), Encoding.UTF8.GetBytes(Plist("New", "3.0")), "New", ThinX64);
+
+        var found = PluginDiscovery.Discover(
+        [
+            (Path.Combine(_dir, "Components"), PluginFormat.Au),
+            (Path.Combine(_dir, "VST"), PluginFormat.Vst2),
+            (Path.Combine(_dir, "VST3"), PluginFormat.Vst3),
+        ]).ToDictionary(t => t.Path);
+
+        Assert.Equal(3, found.Count);
+        Assert.Equal(PluginFormat.Au, found[au].Format);
+        // 通用二进制里两种架构都有，取本机能加载的那种。
+        Assert.Equal(StaticInspector.NativeArch, found[au].Arch);
+        Assert.Equal((PluginFormat.Vst2, Arch.X64), (found[vst2].Format, found[vst2].Arch));
+        Assert.Equal((PluginFormat.Vst3, Arch.X64), (found[vst3].Format, found[vst3].Arch));
+
+        Assert.Equal(Path.Combine(vst2, "Contents", "MacOS", "OldBin"), StaticInspector.ResolveBinary(vst2, PluginFormat.Vst2));
+
+        // 没有 Windows 版本信息时，版本取 Info.plist，厂家取上一层文件夹。
+        var info = StaticInspector.FromFileInfo(found[vst2]);
+        Assert.Equal(("Old", "厂家", "1.2"), (info.Name, info.Vendor, info.Version));
+    }
+
+    [Fact]
+    public void AudioUnits_ComeFromInfoPlistWithoutLoading()
+    {
+        var bundle = Bundle("FakeComp.component", Convert.FromBase64String(AudioUnitBinaryPlist), "FakeComp", ThinX64);
+
+        var units = StaticInspector.ReadAudioUnits(bundle);
+
+        Assert.NotNull(units);
+        Assert.Collection(units,
+            fx => Assert.Equal(("FakeComp", "Example Audio", "2.1.0", "Fx", (bool?)false, InfoSource.ModuleInfo),
+                (fx.Name, fx.Vendor, fx.Version, fx.SdkCategory, fx.IsInstrument, fx.Source)),
+            synth => Assert.Equal(("FakeSynth 合成器", "1.0.0", (bool?)true), (synth.Name, synth.Version, synth.IsInstrument)));
+
+        // 没有 AudioComponents 的老式 AU 读不出来，交给文件信息。
+        var old = Bundle("Old.component", Encoding.UTF8.GetBytes(Plist("Old", "1.0")), "Old", ThinX64);
+        Assert.Null(StaticInspector.ReadAudioUnits(old));
+        Assert.Null(StaticInspector.ReadAudioUnits(Path.Combine(_dir, "missing.component")));
+    }
+
+    [Fact]
+    public async Task Scan_RecordsAudioUnitsWithoutTheScanner()
+    {
+        var root = Path.Combine(_dir, "Components");
+        Bundle(Path.Combine("Components", "FakeComp.component"), Sample("xml"), "FakeComp", ThinX64);
+        Bundle(Path.Combine("Components", "Old.component"), Encoding.UTF8.GetBytes(Plist("Old", "4.5")), "Old", ThinX64);
+
+        using (var db = new PluginDatabase(Path.Combine(_dir, "t.db")))
+        {
+            // 扫描器不存在：AU 根本不该用到它。
+            var service = new ScanService(db, new ScannerRunner(Path.Combine(_dir, "missing"), TimeSpan.FromSeconds(5)));
+            var summary = await service.ScanAsync([(root, PluginFormat.Au)], new ScanOptions(Full: true), null, CancellationToken.None);
+
+            Assert.Equal((1, 1, 0), (summary.ModuleInfo, summary.FileInfoOnly, summary.LoadFailed));
+            var plugins = db.LoadPlugins();
+            Assert.Contains(plugins, p => p.Name == "FakeComp" && p.Vendor == "Example Audio" && p.Kind == PluginKind.Effect);
+            Assert.Contains(plugins, p => p.Name == "FakeSynth 合成器" && p.Kind == PluginKind.Instrument);
+            Assert.Contains(plugins, p => p.Name == "Old");
+            Assert.All(plugins, p => Assert.All(p.Files, f => Assert.Equal(PluginFormat.Au, f.Format)));
+        }
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+    }
+
+    [Fact]
+    public void AudioUnitVersionIsMajorMinorBugfix() =>
+        Assert.Equal("10.2.3", StaticInspector.AudioUnitVersion(0x000A0203));
 }

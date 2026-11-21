@@ -135,6 +135,14 @@ public sealed class ScanService(PluginDatabase database, ScannerRunner runner)
         if (target.Format == PluginFormat.Vst3 && StaticInspector.ReadModuleInfo(target.Path) is { } moduleInfo)
             return Result(ScanStatus.ModuleInfo, null, moduleInfo);
 
+        // AU 在 Info.plist 里登记了名称、厂家和类型，同样不用加载。
+        if (target.Format == PluginFormat.Au)
+        {
+            return StaticInspector.ReadAudioUnits(target.Path) is { } units
+                ? Result(ScanStatus.ModuleInfo, null, units)
+                : Result(ScanStatus.FileInfoOnly, null, [StaticInspector.FromFileInfo(target)]);
+        }
+
         // VST2 必须创建实例才能读信息，这正是本软件不做的事：只用文件信息和宿主缓存。
         // DAW 都没记录时，名字和厂家目录里的效果器对上也算效果器（目录只收效果器）。
         if (target.Format == PluginFormat.Vst2)
@@ -145,8 +153,8 @@ public sealed class ScanService(PluginDatabase database, ScannerRunner runner)
             return Result(ScanStatus.FileInfoOnly, null, [info]);
         }
 
-        // 扫描器是 64 位的：32 位 VST3、CLAP、AAX 按方案只记录文件信息。
-        if (target.Format != PluginFormat.Vst3 || target.Arch is not (Arch.X64 or Arch.Unknown))
+        // 扫描器只加载和自己同架构的 VST3；其他架构的 VST3、CLAP、AAX 按方案只记录文件信息。
+        if (target.Format != PluginFormat.Vst3 || !StaticInspector.ScannerCanLoad(target.Arch))
             return Result(ScanStatus.FileInfoOnly, null, [StaticInspector.FromFileInfo(target)]);
 
         var load = await runner.LoadAsync(target.Path, cancel, timeout);

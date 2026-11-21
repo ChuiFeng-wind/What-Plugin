@@ -2,8 +2,9 @@ using System.Text;
 using WhatPlugin.Core;
 
 // 命令行工具：不开界面运行扫描、查看结果，用于验证和排错。
-//   discover                         只列出会扫描的对象，不加载插件
-//   scan [--full] [--match 文本] [--db 路径] [--timeout 秒] [--vst2-folder 路径] [--format vst2|others]
+//   discover [--root 文件夹]          只列出会扫描的对象，不加载插件
+//   scan [--full] [--match 文本] [--db 路径] [--timeout 秒] [--vst2-folder 路径] [--format vst2|others] [--root 文件夹]
+//        --root：只扫这一个文件夹（按扩展名认格式），不扫系统的插件目录
 //   list [--db 路径]
 //   projects [文件夹...] [--db 路径] [--missing-only]  只读扫描工程，输出缺失和使用统计
 //   tracks 工程文件 [--db 路径]        只读，按轨道列出插入效果，并标出插件库里有没有
@@ -18,6 +19,10 @@ string? Option(string name)
 }
 
 var dbPath = Option("--db") ?? PluginDatabase.ResolveDefaultPath();
+
+// 指定了 --root 时只扫那个文件夹；里面的 .dll 按 VST2 认，插件包按扩展名认。
+IReadOnlyList<(string Path, PluginFormat Format)> Roots(IEnumerable<string> vst2Folders) =>
+    Option("--root") is { } root ? [(Path.GetFullPath(root), PluginFormat.Vst2)] : PluginDiscovery.Roots(vst2Folders);
 HostStock.Current = HostStock.Load(DawLocations.Default);
 
 switch (command)
@@ -46,7 +51,7 @@ switch (command)
     }
     case "discover":
     {
-        var targets = PluginDiscovery.Discover(PluginDiscovery.DefaultRoots());
+        var targets = PluginDiscovery.Discover(Roots([]));
         foreach (var group in targets.GroupBy(t => (t.Format, t.Arch)).OrderBy(g => g.Key.Format))
             Console.WriteLine($"{group.Key.Format,-5} {group.Key.Arch,-8} {group.Count(),5}");
         Console.WriteLine($"合计 {targets.Count}");
@@ -72,7 +77,7 @@ switch (command)
             Formats: Option("--format") switch
             {
                 "vst2" => [PluginFormat.Vst2],
-                "others" => [PluginFormat.Vst3, PluginFormat.Clap, PluginFormat.Aax],
+                "others" => [PluginFormat.Vst3, PluginFormat.Clap, PluginFormat.Aax, PluginFormat.Au],
                 _ => null,
             },
             HostInfo: HostPluginCache.LoadAll());
@@ -85,7 +90,7 @@ switch (command)
                 Console.Error.WriteLine($"[{p.Done}/{p.Total}] {p.Current}");
         });
 
-        var summary = await service.ScanAsync(PluginDiscovery.Roots(database.LoadVst2Folders()), options, progress, cancel.Token);
+        var summary = await service.ScanAsync(Roots(database.LoadVst2Folders()), options, progress, cancel.Token);
         Console.WriteLine(summary);
         return 0;
     }

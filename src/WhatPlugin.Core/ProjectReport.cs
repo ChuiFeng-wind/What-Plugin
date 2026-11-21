@@ -315,8 +315,8 @@ public static partial class ProjectReport
         {
             if (plugin.IsMissing || plugin.User.Hidden || plugin.Kind == PluginKind.Instrument)
                 continue;
-            // 只有 AAX 的插件用在 Pro Tools 里，读不了它的工程，判断不了；WaveShell 只是外壳。
-            if (plugin.Files.All(f => f.Format == PluginFormat.Aax) || plugin.Key == "waveshell")
+            // 只有 AAX 的插件用在 Pro Tools 里，只有 AU 的主要用在 Logic 里，都读不了它们的工程，判断不了；WaveShell 只是外壳。
+            if (plugin.Files.All(f => f.Format is PluginFormat.Aax or PluginFormat.Au) || plugin.Key == "waveshell")
                 continue;
             var used = usage.GetValueOrDefault(plugin.Key);
             if (used == null)

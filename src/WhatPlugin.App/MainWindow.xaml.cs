@@ -234,7 +234,8 @@ public partial class MainWindow : Window
         _suppressFilter = true;
         SetOptions(VendorFilter, AllVendors, _plugins.Where(InCurrentView).Select(p => p.Vendor).Distinct().Order(StringComparer.OrdinalIgnoreCase));
         RebuildCategories();
-        SetOptions(FormatFilter, AllFormats, Enum.GetValues<PluginFormat>().Select(Labels.Format));
+        // AU 只有 Mac 上有，Windows 版的筛选里不列。
+        SetOptions(FormatFilter, AllFormats, Enum.GetValues<PluginFormat>().Where(f => f != PluginFormat.Au).Select(Labels.Format));
         SetOptions(RatingFilter, AllRatings, [Rated, HighRated, LowRated, Unrated, HasNote]);
         _suppressFilter = false;
     }
