@@ -105,6 +105,9 @@ public sealed class LibraryTests : IDisposable
         var texts = view.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
         Assert.Contains("Pro-Q 4", texts);
         Assert.Contains("Valhalla DSP", texts);
+        // 5 颗星在评分列里完整显示（Mac 上苹方的星号更宽）。
+        var stars = view.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "★★★★★");
+        Assert.True(stars.DesiredSize.Width <= stars.Bounds.Width + 0.5, $"{stars.DesiredSize.Width} > {stars.Bounds.Width}");
     }
 
     [AvaloniaFact]

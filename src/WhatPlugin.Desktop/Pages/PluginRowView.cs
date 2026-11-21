@@ -122,6 +122,12 @@ public sealed class PluginRowView : Border
         else
         {
             var text = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontSize = 12.5 };
+            // 苹方的“★”比 Segoe UI 宽，12.5 号时 5 颗星在 Mac 上放不进 84 宽的评分列。
+            if (column == LibraryColumn.Rating)
+            {
+                text.FontSize = 11;
+                text.TextTrimming = TextTrimming.None;
+            }
             text.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable(column == LibraryColumn.Rating ? "Accent" : "TextDim"));
             _texts[column.Key] = text;
             content = text;
