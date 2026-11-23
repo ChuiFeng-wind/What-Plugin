@@ -19,6 +19,11 @@ public static class ProjectFolderTree
 {
     private const string NameSeparator = " / ";
 
+    /// <summary>折叠的文件夹和树是否显示，存在设置里（两个界面共用）。</summary>
+    public const string CollapsedSetting = "projects.collapsedFolders";
+
+    public const string VisibleSetting = "projects.treeVisible";
+
     public static IReadOnlyList<ProjectFolderNode> Build(IEnumerable<string> roots, IEnumerable<ProjectEntry> projects)
     {
         var tops = OutermostRoots(roots).ToDictionary(r => r, r => new Draft(r, RootName(r)), StringComparer.OrdinalIgnoreCase);

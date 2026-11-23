@@ -31,7 +31,7 @@ public partial class MainWindow
 
     private void InitializeProjects()
     {
-        IdleMonths.ItemsSource = new[] { "6 个月", "12 个月", "24 个月", "36 个月" };
+        IdleMonths.ItemsSource = IdleListing.MonthOptions.Select(IdleListing.MonthLabel).ToList();
         IdleMonths.SelectedIndex = 1;
         ProjectSegmentAll.IsChecked = true;
         _projectUiReady = true;
@@ -49,13 +49,7 @@ public partial class MainWindow
         var selectedProject = (ProjectGrid.SelectedItem as ProjectViewModel)?.Entry.Key;
         var selectedMissing = (MissingGrid.SelectedItem as MissingViewModel)?.Name;
 
-        _report = ProjectReport.Build(_database.LoadProjectFiles(), _database.LoadPlugins(), _database.LoadIgnoredProjectNames());
-        // 忽略的也算在内：把缺失的插件标成忽略，不算“补齐了”。
-        RecordUsage(() =>
-        {
-            foreach (var project in _report.Projects.Where(p => p.Status == ProjectScanStatus.Ok))
-                _database.RecordProjectMissing(project.Key, project.Plugins.Count(l => l.State is ProjectPluginState.Missing or ProjectPluginState.Ignored));
-        });
+        _report = ProjectListing.Load(_database);
         foreach (var plugin in _plugins)
             plugin.Usage = _report.Usage.GetValueOrDefault(plugin.Row.Key);
 
@@ -67,7 +61,7 @@ public partial class MainWindow
         ProjectGrid.SelectedItem = _projects.FirstOrDefault(p => p.Entry.Key == selectedProject);
 
         _rememberedMatcher = null;
-        _missing = _report.Missing.Select(m => new MissingViewModel(m, TrashMemory.Find(m.Name, RememberedMatcher))).ToList();
+        _missing = ProjectListing.MissingRows(_report, RememberedMatcher).Select(m => new MissingViewModel(m)).ToList();
         _missingView = CollectionViewSource.GetDefaultView(_missing);
         _missingView.Filter = MatchesMissing;
         MissingGrid.ItemsSource = _missingView;
@@ -90,8 +84,7 @@ public partial class MainWindow
     {
         StatusText.Text = _page switch
         {
-            AppPage.Projects when _projects.Count == 0 => "工程文件只会被读取，不会被修改。",
-            AppPage.Projects => $"{_projects.Count} 个工程，{_projects.Count(p => p.MissingCount > 0)} 个有缺失，缺失插件 {_missing.Count} 种",
+            AppPage.Projects => ProjectListing.Status(_projects.Count, _projects.Count(p => p.MissingCount > 0), _missing.Count),
             AppPage.Idle => DescribeIdle(),
             AppPage.Chains => "混音笔记只是记录，不会写入 DAW",
             AppPage.Health => DescribeHealth(),
@@ -172,20 +165,7 @@ public partial class MainWindow
         }
     }
 
-    private string DescribeProjectScan(ProjectScanSummary s)
-    {
-        var parts = new List<string>
-        {
-            s.Cancelled ? "已停止" : "工程读取完成",
-            $"找到 {s.Found} 个工程文件，合并为 {_projects.Count} 个工程",
-            $"本次读取 {s.Parsed} 个，未变化 {s.Unchanged} 个",
-        };
-        if (s.Failed > 0)
-            parts.Add($"{s.Failed} 个读取失败");
-        if (s.Removed > 0)
-            parts.Add($"移除 {s.Removed} 条已不存在的记录");
-        return string.Join("，", parts);
-    }
+    private string DescribeProjectScan(ProjectScanSummary s) => ProjectListing.DescribeScan(s, _projects.Count);
 
     private void SetProjectScanning(bool scanning)
     {
@@ -219,11 +199,7 @@ public partial class MainWindow
 
     private bool MatchesMissing(object item) => MatchesSearch(((MissingViewModel)item).SearchText);
 
-    private bool MatchesSearch(string text)
-    {
-        var search = ProjectSearchBox.Text.Trim().ToLowerInvariant();
-        return search.Length == 0 || search.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(text.Contains);
-    }
+    private bool MatchesSearch(string text) => ProjectListing.Matches(ProjectSearchBox.Text, text);
 
     private void ProjectFilter_Changed(object sender, RoutedEventArgs e)
     {
@@ -244,13 +220,8 @@ public partial class MainWindow
             ? _missingView?.Cast<object>().Count() ?? 0
             : _projectView?.Cast<object>().Count() ?? 0;
         ProjectEmpty.Visibility = shown == 0 ? Visibility.Visible : Visibility.Collapsed;
-        ProjectEmptyText.Text =
-            _database.LoadProjectFolders().Count == 0 ? "点右上角“添加文件夹”，选择存放工程的位置"
-            : _projects.Count == 0 ? "这些文件夹里没有找到工程"
-            : ShowingMissingSummary && _missing.Count == 0 ? "没有缺失的插件"
-            : ProjectSegmentMissing.IsChecked == true && !_projects.Any(p => p.MissingCount > 0) ? "所有工程需要的插件都装了"
-            : _projectFolderFilter != null ? "这个文件夹里没有符合条件的工程"
-            : "没有符合搜索的工程";
+        ProjectEmptyText.Text = ProjectListing.EmptyText(_database.LoadProjectFolders().Count == 0, _projects.Count, ShowingMissingSummary,
+            _missing.Count, ProjectSegmentMissing.IsChecked == true, _projects.Any(p => p.MissingCount > 0), _projectFolderFilter != null);
     }
 
     private void ProjectSelection_Changed(object sender, SelectionChangedEventArgs e) => ShowProjectDetail();
@@ -265,36 +236,22 @@ public partial class MainWindow
 
         if (project != null)
         {
-            var entry = project.Entry;
-            ProjectDetailTitle.Text = entry.Name;
-            ProjectDetailMeta.Text = $"{project.HostText}，最近修改 {project.ModifiedText}"
-                + (entry.Versions > 1 ? $"，共 {entry.Versions} 个版本，下面是最新版本" : "");
-            ProjectDetailPath.Text = entry.Path;
-            ProjectDetailError.Visibility = entry.Error != null ? Visibility.Visible : Visibility.Collapsed;
-            ProjectDetailError.Text = entry.Error != null ? "无法读取：" + entry.Error : "";
-
-            var third = entry.Plugins.Where(p => p.State is ProjectPluginState.Installed or ProjectPluginState.Missing)
-                .Select(p => new ProjectLineViewModel(p, p.State == ProjectPluginState.Missing ? TrashMemory.Find(p.Name, RememberedMatcher) : null)).ToList();
-            ProjectDetailLines.ItemsSource = third;
-            var stock = entry.Plugins.Where(p => p.State == ProjectPluginState.Stock).Select(p => p.Name).ToList();
-            var ignored = entry.Plugins.Where(p => p.State == ProjectPluginState.Ignored).Select(p => p.Name).ToList();
-            var notes = new List<string>();
-            if (third.Count == 0 && entry.Error == null)
-                notes.Add("这个工程没有用到第三方效果器。");
-            if (stock.Count > 0)
-                notes.Add($"宿主自带（不算缺失）：{string.Join("、", stock)}");
-            if (ignored.Count > 0)
-                notes.Add($"已设为不算缺失：{string.Join("、", ignored)}");
-            ProjectDetailNotes.Text = string.Join("\n", notes);
-            ProjectDetailNotes.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            var detail = ProjectListing.Detail(project.Entry, RememberedMatcher);
+            ProjectDetailTitle.Text = detail.Title;
+            ProjectDetailMeta.Text = detail.Meta;
+            ProjectDetailPath.Text = detail.Path;
+            ProjectDetailError.Visibility = detail.Error != null ? Visibility.Visible : Visibility.Collapsed;
+            ProjectDetailError.Text = detail.Error ?? "";
+            ProjectDetailLines.ItemsSource = detail.Lines.Select(l => new ProjectLineViewModel(l)).ToList();
+            ProjectDetailNotes.Text = detail.Notes;
+            ProjectDetailNotes.Visibility = detail.Notes.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         if (missing != null)
         {
             MissingDetailTitle.Text = missing.Name;
-            MissingDetailMeta.Text = $"{missing.ProjectCount} 个工程的最新版本需要它";
-            MissingDetailProjects.ItemsSource = missing.Summary.Projects
-                .Select(p => $"{p.ModifiedUtc.ToLocalTime():yyyy-MM-dd}  {p.Name}").ToList();
+            MissingDetailMeta.Text = ProjectListing.MissingMeta(missing.Row);
+            MissingDetailProjects.ItemsSource = ProjectListing.MissingProjects(missing.Row);
         }
     }
 
@@ -320,14 +277,14 @@ public partial class MainWindow
     {
         _database.IgnoreProjectName(name);
         RefreshProjectReport();
-        StatusText.Text = $"“{name}”不再算作缺失，可以点“恢复忽略的名称”撤销";
+        StatusText.Text = ProjectListing.Ignored(name);
     }
 
     private void ClearIgnored_Click(object sender, RoutedEventArgs e)
     {
         _database.ClearIgnoredProjectNames();
         RefreshProjectReport();
-        StatusText.Text = "已恢复所有忽略的名称";
+        StatusText.Text = ProjectListing.IgnoredCleared;
     }
 
     /// <summary>插件详情里的工程使用情况。</summary>
@@ -352,7 +309,7 @@ public partial class MainWindow
 
     // ---------- 闲置报告 ----------
 
-    private int IdleMonthCount => IdleMonths.SelectedIndex switch { 0 => 6, 2 => 24, 3 => 36, _ => 12 };
+    private int IdleMonthCount => IdleMonths.SelectedIndex >= 0 ? IdleListing.MonthOptions[IdleMonths.SelectedIndex] : IdleListing.DefaultMonths;
 
     private void RefreshIdle()
     {
@@ -372,13 +329,8 @@ public partial class MainWindow
 
     private bool MatchesIdle(object item)
     {
-        var idle = (IdleViewModel)item;
-        if (IdleSegmentNever.IsChecked == true && idle.Idle.Reason != IdleReason.NeverUsed)
-            return false;
-        if (IdleSegmentOld.IsChecked == true && idle.Idle.Reason != IdleReason.LongUnused)
-            return false;
-        var search = IdleSearchBox.Text.Trim().ToLowerInvariant();
-        return search.Length == 0 || search.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(idle.SearchText.Contains);
+        var filter = IdleSegmentNever.IsChecked == true ? IdleFilter.NeverUsed : IdleSegmentOld.IsChecked == true ? IdleFilter.LongUnused : IdleFilter.All;
+        return IdleListing.Matches(((IdleViewModel)item).Info, filter, IdleSearchBox.Text);
     }
 
     private void IdleOption_Changed(object sender, SelectionChangedEventArgs e) => RefreshIdleAndStatus();
@@ -404,24 +356,17 @@ public partial class MainWindow
         IdleGrid.Visibility = noProjects ? Visibility.Collapsed : Visibility.Visible;
         var shown = _idleView?.Cast<object>().Count() ?? 0;
         IdleEmpty.Visibility = noProjects || shown == 0 ? Visibility.Visible : Visibility.Collapsed;
-        IdleEmptyText.Text = noProjects
-            ? "先到“工程”页扫描工程，才知道哪些插件没用过"
-            : _idle.Count == 0 ? "没有闲置的插件" : "没有符合筛选的插件";
+        IdleEmptyText.Text = IdleListing.EmptyText(_report.Projects.Count, _idle.Count);
     }
 
-    private string DescribeIdle()
-    {
-        var never = _idle.Count(i => i.Idle.Reason == IdleReason.NeverUsed);
-        return _report.Projects.Count == 0
-            ? "闲置报告依据工程扫描结果"
-            : $"依据 {_report.Projects.Count} 个工程：{never} 款从未出现，{_idle.Count - never} 款超过 {IdleMonthCount} 个月没用";
-    }
+    private string DescribeIdle() =>
+        IdleListing.Describe(_report.Projects.Count, _idle.Select(i => i.Idle).ToList(), IdleMonthCount);
 
     private void IdleGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         var count = IdleGrid.SelectedItems.Count;
         IdleBlacklistButton.IsEnabled = count > 0;
-        IdleBlacklistButton.Content = count > 0 ? $"把选中的 {count} 款移入垃圾桶…" : "把选中的插件移入垃圾桶…";
+        IdleBlacklistButton.Content = IdleListing.ButtonText(count);
     }
 
     private void IdleGrid_DoubleClick(object sender, MouseButtonEventArgs e)
@@ -436,24 +381,14 @@ public partial class MainWindow
         if (selected.Count == 0)
             return;
         var reason = Dialogs.Prompt(this, "移入垃圾桶",
-            $"把选中的 {selected.Count} 款插件移入垃圾桶。只是在本软件中隐藏，文件不动，DAW 里仍可使用。\n移入原因（选填）：",
+            IdleListing.Prompt(selected.Count),
             "移入垃圾桶", "", danger: true, allowEmpty: true);
         if (reason == null)
             return;
 
         try
         {
-            foreach (var item in selected)
-            {
-                var user = item.Row.User;
-                var text = reason.Trim();
-                // 没填原因时保留之前写过的。
-                _database.SaveUserData(item.Row.Id, user with
-                {
-                    Hidden = true,
-                    BlacklistReason = text.Length > 0 ? text : user.BlacklistReason,
-                });
-            }
+            IdleListing.MoveToTrash(_database, selected.Select(i => i.Row), reason);
         }
         catch (Microsoft.Data.Sqlite.SqliteException error)
         {
@@ -462,6 +397,6 @@ public partial class MainWindow
         }
 
         LoadPlugins();
-        StatusText.Text = $"已把 {selected.Count} 款插件移入垃圾桶，可在左侧“垃圾桶”查看或恢复";
+        StatusText.Text = IdleListing.Moved(selected.Count);
     }
 }

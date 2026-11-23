@@ -298,6 +298,26 @@
         <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
     </Style>
 
+    <!-- 文件夹树（工程页左侧）：和分类栏一样，选中时琥珀色。 -->
+    <Style Selector="TreeView.Folders TreeViewItem">
+        <Setter Property="Foreground" Value="{DynamicResource TextDim}"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="TreeView.Folders TreeViewItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="TreeView.Folders TreeViewItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}"/>
+    </Style>
+    <Style Selector="TreeView.Folders TreeViewItem:selected /template/ Border#PART_LayoutRoot, TreeView.Folders TreeViewItem:selected:pointerover /template/ Border#PART_LayoutRoot, TreeView.Folders TreeViewItem:selected:focus /template/ Border#PART_LayoutRoot, TreeView.Folders TreeViewItem:selected:focus-within /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+    </Style>
+    <Style Selector="TreeView.Folders TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter, TreeView.Folders TreeViewItem:selected:pointerover /template/ ContentPresenter#PART_HeaderPresenter, TreeView.Folders TreeViewItem:selected:focus /template/ ContentPresenter#PART_HeaderPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+    </Style>
+
     <!-- 插件表格的行：底部一条细线，悬停变亮，选中时琥珀色底加左边 3px 竖条 -->
     <Style Selector="ListBox.Plugins ListBoxItem">
         <Setter Property="Padding" Value="0"/>

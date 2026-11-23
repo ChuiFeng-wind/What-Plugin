@@ -24,7 +24,6 @@ public sealed class RouteMapView : Grid
     private const double RowGap = 14;
     private const double Margin0 = 16;
     private const double SendOpacity = 0.4;
-    private const long ImplicitMaster = -1;
 
     private readonly Canvas _canvas = new();
     private readonly ScrollViewer _scroll;
@@ -89,22 +88,17 @@ public sealed class RouteMapView : Grid
 
     protected override AutomationPeer OnCreateAutomationPeer() => new FrameworkElementAutomationPeer(this);
 
-    /// <summary>画出 notes 之间的路由。只画接了路由的笔记；没有输出的接到“主输出”。</summary>
+    /// <summary>画出 notes 之间的路由。只画接了路由的笔记；没有输出的接到“主输出”。排布在 Core 里算。</summary>
     public void Show(IReadOnlyList<PluginChain> notes, IReadOnlyList<NoteRoute> routes, Func<PluginChain, IReadOnlyList<(string Name, bool Installed)>> plugins)
     {
         _canvas.Children.Clear();
         _cards.Clear();
         _edges.Clear();
 
-        var byId = notes.ToDictionary(n => n.Id);
-        var edges = routes.Where(r => byId.ContainsKey(r.From) && byId.ContainsKey(r.To) && r.From != r.To).ToList();
-        var routed = edges.SelectMany(r => new[] { r.From, r.To }).ToHashSet();
-        foreach (var note in notes.Where(n => n.Role != ChannelRole.Track))
-            routed.Add(note.Id);
-        var nodes = notes.Where(n => routed.Contains(n.Id)).ToList();
-        if (nodes.Count == 0)
+        var layout = RouteMapLayout.Build(notes, routes);
+        if (layout.IsEmpty)
         {
-            _empty.Text = "这个文件夹里的笔记还没有路由。从工程导入轨道时勾选“连同输出和发送到的编组、效果轨一起导入”会自动连好；也可以在笔记里设置“输出到”和“发送”。";
+            _empty.Text = RouteMapLayout.EmptyText;
             _empty.Visibility = Visibility.Visible;
             _scroll.Visibility = Visibility.Collapsed;
             return;
@@ -112,130 +106,29 @@ public sealed class RouteMapView : Grid
         _empty.Visibility = Visibility.Collapsed;
         _scroll.Visibility = Visibility.Visible;
 
-        // 没有输出连线的（主输出通道本身除外）接到主输出：文件夹里只有一条主输出笔记就接它，否则画一个“主输出”。
-        var outputs = edges.Where(e => e.Kind == RouteKind.Output).Select(e => e.From).ToHashSet();
-        var masters = nodes.Where(n => n.Role == ChannelRole.Master).ToList();
-        var dangling = nodes.Where(n => n.Role != ChannelRole.Master && !outputs.Contains(n.Id)).ToList();
-        long? sink = null;
-        if (dangling.Count > 0)
-        {
-            sink = masters.Count == 1 ? masters[0].Id : ImplicitMaster;
-            foreach (var node in dangling)
-                edges.Add(new NoteRoute(node.Id, sink.Value, RouteKind.Output));
-        }
-        var ids = nodes.Select(n => n.Id).ToList();
-        if (sink == ImplicitMaster)
-            ids.Add(ImplicitMaster);
-
-        ChannelRole RoleOf(long id) => id == ImplicitMaster ? ChannelRole.Master : byId[id].Role;
-        bool Main(long id) => RoleOf(id) is ChannelRole.Track or ChannelRole.Group;
-
-        // 分列：轨道和编组按接入的层数往右排（编组可以套编组），效果轨统一放一列，主输出放最后一列。有环时最多迭代 n 次。
-        var column = ids.ToDictionary(id => id, _ => 0);
-        for (var pass = 0; pass < ids.Count; pass++)
-        {
-            var changed = false;
-            foreach (var edge in edges.Where(e => e.Kind != RouteKind.Sidechain && Main(e.From) && Main(e.To)))
-            {
-                if (column[edge.To] < column[edge.From] + 1)
-                {
-                    column[edge.To] = column[edge.From] + 1;
-                    changed = true;
-                }
-            }
-            if (!changed)
-                break;
-        }
-        var mainLast = ids.Where(Main).Select(id => column[id]).DefaultIfEmpty(-1).Max();
-        var effectColumn = mainLast + 1;
-        var masterColumn = effectColumn + (ids.Any(id => RoleOf(id) == ChannelRole.Effect) ? 1 : 0);
-        foreach (var id in ids)
-        {
-            if (RoleOf(id) == ChannelRole.Effect)
-                column[id] = effectColumn;
-            else if (RoleOf(id) == ChannelRole.Master)
-                column[id] = masterColumn;
-        }
-
-        // 列内顺序：按相邻列里连着的位置来回排几遍，减少交叉。排序优先看输出（主干），没有才看发送。
-        var columns = ids.GroupBy(id => column[id]).OrderBy(g => g.Key)
-            .Select(g => g.OrderBy(id => RoleOrder(RoleOf(id))).ThenBy(id => id == ImplicitMaster ? "" : byId[id].Name, StringComparer.CurrentCulture).ToList())
-            .ToList();
-        Dictionary<long, double> Positions() => columns
-            .SelectMany(c => c.Select((id, i) => (id, p: (i + 0.5) / c.Count)))
-            .ToDictionary(x => x.id, x => x.p);
-        double? Average(IEnumerable<NoteRoute> links, Func<NoteRoute, long> other, Dictionary<long, double> position)
-        {
-            var list = links.ToList();
-            var main = list.Where(e => e.Kind == RouteKind.Output).ToList();
-            var use = main.Count > 0 ? main : list;
-            return use.Count > 0 ? use.Average(e => position[other(e)]) : null;
-        }
-        void Order(List<long> col, Func<long, double?> key)
-        {
-            var keys = col.Select((id, i) => (id, k: key(id) ?? (i + 0.5) / col.Count)).ToDictionary(x => x.id, x => x.k);
-            var stable = col.ToList();
-            col.Sort((a, b) => keys[a] != keys[b] ? keys[a].CompareTo(keys[b]) : stable.IndexOf(a).CompareTo(stable.IndexOf(b)));
-        }
-        for (var sweep = 0; sweep < 3; sweep++)
-        {
-            for (var c = columns.Count - 2; c >= 0; c--)
-            {
-                var position = Positions();
-                Order(columns[c], id => Average(edges.Where(e => e.From == id && e.Kind != RouteKind.Sidechain && column[e.To] > column[id]), e => e.To, position));
-            }
-            for (var c = 1; c < columns.Count; c++)
-            {
-                var position = Positions();
-                Order(columns[c], id => Average(edges.Where(e => e.To == id && e.Kind != RouteKind.Sidechain && column[e.From] < column[id]), e => e.From, position));
-            }
-        }
-
-        // 每条笔记的发送和侧链目标，写在卡片上（线淡的时候也能看清）。
-        var sendNames = edges.Where(e => e.Kind == RouteKind.Send)
-            .GroupBy(e => e.From)
-            .ToDictionary(g => g.Key, g => g.Select(e => byId[e.To].Name).ToList());
-        var sidechainNames = edges.Where(e => e.Kind == RouteKind.Sidechain)
-            .GroupBy(e => e.From)
-            .ToDictionary(g => g.Key, g => g.Select(e => $"{byId[e.To].Name}（{e.Plugin}）").ToList());
-
-        // 放卡片：第一列从上往下排；后面的列尽量和接入它的卡片对齐（像思维导图），不重叠。
-        var center = new Dictionary<long, double>();
         var heights = new Dictionary<long, double>();
-        var x = Margin0;
-        double maxBottom = 0;
-        foreach (var col in columns)
+        foreach (var node in layout.Columns.SelectMany(c => c))
         {
-            var bottom = Margin0 - RowGap;
-            foreach (var id in col)
-            {
-                var card = id == ImplicitMaster
-                    ? Card(null, [], ChannelRole.Master, [], [])
-                    : Card(byId[id], plugins(byId[id]), byId[id].Role, sendNames.GetValueOrDefault(id) ?? [], sidechainNames.GetValueOrDefault(id) ?? []);
-                card.Measure(new Size(CardWidth, double.PositiveInfinity));
-                var height = card.DesiredSize.Height;
-                var incoming = edges.Where(e => e.To == id && e.Kind != RouteKind.Sidechain && center.ContainsKey(e.From)).ToList();
-                var mainIn = incoming.Where(e => e.Kind == RouteKind.Output).ToList();
-                var use = mainIn.Count > 0 ? mainIn : incoming;
-                var top = use.Count > 0 ? use.Average(e => center[e.From]) - height / 2 : Margin0;
-                top = Math.Max(top, bottom + RowGap);
-                Canvas.SetLeft(card, x);
-                Canvas.SetTop(card, top);
-                Panel.SetZIndex(card, 2);
-                _canvas.Children.Add(card);
-                _cards[id] = card;
-                heights[id] = height;
-                center[id] = top + height / 2;
-                bottom = top + height;
-            }
-            maxBottom = Math.Max(maxBottom, bottom);
-            x += CardWidth + ColumnGap;
+            var card = Card(node, node.Note == null ? [] : plugins(node.Note));
+            card.Measure(new Size(CardWidth, double.PositiveInfinity));
+            heights[node.Id] = card.DesiredSize.Height;
+            _cards[node.Id] = card;
         }
-        _canvas.Width = x - ColumnGap + Margin0;
+        var tops = layout.Place(id => heights[id], Margin0, RowGap);
+        double maxBottom = 0;
+        foreach (var (id, card) in _cards)
+        {
+            Canvas.SetLeft(card, Margin0 + layout.ColumnOf(id) * (CardWidth + ColumnGap));
+            Canvas.SetTop(card, tops[id]);
+            Panel.SetZIndex(card, 2);
+            _canvas.Children.Add(card);
+            maxBottom = Math.Max(maxBottom, tops[id] + heights[id]);
+        }
+        _canvas.Width = Margin0 + layout.Columns.Count * (CardWidth + ColumnGap) - ColumnGap + Margin0;
         _canvas.Height = maxBottom + Margin0 + 30;
 
-        foreach (var edge in edges.OrderBy(e => e.Kind == RouteKind.Output))
-            DrawEdge(edge, heights, column);
+        foreach (var edge in layout.Edges)
+            DrawEdge(edge, heights, layout);
 
         // 比可见区域宽时先缩小到放得下（最小 0.6），之后可以 Ctrl + 滚轮再调。
         Dispatcher.BeginInvoke(() =>
@@ -246,7 +139,7 @@ public sealed class RouteMapView : Grid
         }, DispatcherPriority.Loaded);
     }
 
-    private void DrawEdge(NoteRoute edge, Dictionary<long, double> heights, Dictionary<long, int> column)
+    private void DrawEdge(NoteRoute edge, Dictionary<long, double> heights, RouteMapLayout layout)
     {
         if (!_cards.TryGetValue(edge.From, out var from) || !_cards.TryGetValue(edge.To, out var to))
             return;
@@ -259,14 +152,14 @@ public sealed class RouteMapView : Grid
         var figure = new PathFigure { StartPoint = start };
         Point end;
         bool pointsLeft;
-        if (column[edge.To] > column[edge.From])
+        if (layout.ColumnOf(edge.To) > layout.ColumnOf(edge.From))
         {
             end = new Point(Canvas.GetLeft(to), toTop + heights[edge.To] / 2 + offset);
             var bend = Math.Max(30, (end.X - start.X) / 2);
             figure.Segments.Add(new BezierSegment(new Point(start.X + bend, start.Y), new Point(end.X - bend, end.Y), end, true));
             pointsLeft = false;
         }
-        else if (column[edge.To] == column[edge.From])
+        else if (layout.ColumnOf(edge.To) == layout.ColumnOf(edge.From))
         {
             // 同一列（例如效果轨发送到另一条效果轨）：从右边绕一个弯接到目标右边。
             end = new Point(Canvas.GetLeft(to) + CardWidth, toTop + heights[edge.To] / 2 + offset);
@@ -312,11 +205,12 @@ public sealed class RouteMapView : Grid
         _edges.Add((edge.From, edge.To, rest, line, arrow));
     }
 
-    private static int RoleOrder(ChannelRole role) =>
-        role switch { ChannelRole.Group => 1, ChannelRole.Effect => 2, ChannelRole.Master => 3, _ => 0 };
-
-    private Border Card(PluginChain? note, IReadOnlyList<(string Name, bool Installed)> plugins, ChannelRole role, IReadOnlyList<string> sends, IReadOnlyList<string> sidechains)
+    private Border Card(RouteMapNode node, IReadOnlyList<(string Name, bool Installed)> plugins)
     {
+        var note = node.Note;
+        var role = node.Role;
+        var sends = node.Sends;
+        var sidechains = node.Sidechains;
         var stack = new StackPanel();
         var head = new DockPanel();
         var icon = new TextBlock { Text = note == null || role != ChannelRole.Track ? MainWindow.RoleGlyph(role) : "", FontSize = 13, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -375,12 +269,7 @@ public sealed class RouteMapView : Grid
             BorderThickness = new Thickness(role == ChannelRole.Track ? 1 : 1.5),
             Child = stack,
             Cursor = note == null ? null : Cursors.Hand,
-            ToolTip = note == null
-                ? "没有指定输出的通道都接到这里"
-                : (plugins.Count > 0 ? string.Join(" → ", plugins.Select(p => p.Name)) + "\n" : "")
-                  + (sends.Count > 0 ? "发送 → " + string.Join("、", sends) + "\n" : "")
-                  + (sidechains.Count > 0 ? "侧链 → " + string.Join("、", sidechains) + "\n" : "")
-                  + "点击打开这条笔记",
+            ToolTip = RouteMapLayout.ToolTip(node, plugins),
         };
         card.SetResourceReference(Border.BackgroundProperty, "Surface");
         card.SetResourceReference(Border.BorderBrushProperty, role == ChannelRole.Track ? "LineStrong" : "Accent");
@@ -394,7 +283,7 @@ public sealed class RouteMapView : Grid
                 OpenNote?.Invoke(id);
             };
         }
-        var key = note?.Id ?? ImplicitMaster;
+        var key = node.Id;
         card.MouseEnter += (_, _) => Highlight(key);
         card.MouseLeave += (_, _) => Highlight(null);
         return card;

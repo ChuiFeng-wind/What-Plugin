@@ -17,15 +17,25 @@ public sealed class PageFrame : Grid
         set => _subtitle.Text = value;
     }
 
-    public PageFrame(string title, string subtitle, Control content)
+    /// <param name="actions">标题右边的按钮（例如工程页的“添加文件夹”“扫描工程”）。</param>
+    public PageFrame(string title, string subtitle, Control content, Control? actions = null)
     {
         Content = content;
         Margin = new Thickness(28, 0, 24, 0);
         RowDefinitions = new RowDefinitions("Auto,*");
 
-        var header = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
-        header.Children.Add(new TextBlock { Text = title, Classes = { "PageTitle" } });
-        header.Children.Add(_subtitle = new TextBlock { Text = subtitle, Classes = { "PageSubtitle" } });
+        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 16) };
+        if (actions != null)
+        {
+            actions.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            actions.Margin = new Thickness(16, 0, 0, 0);
+            DockPanel.SetDock(actions, Dock.Right);
+            header.Children.Add(actions);
+        }
+        var titles = new StackPanel();
+        titles.Children.Add(new TextBlock { Text = title, Classes = { "PageTitle" } });
+        titles.Children.Add(_subtitle = new TextBlock { Text = subtitle, Classes = { "PageSubtitle" } });
+        header.Children.Add(titles);
         Children.Add(header);
 
         SetRow(content, 1);

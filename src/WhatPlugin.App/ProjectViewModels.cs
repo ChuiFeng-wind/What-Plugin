@@ -4,58 +4,54 @@ using WhatPlugin.Core;
 
 namespace WhatPlugin.App;
 
-/// <summary>工程列表的一行。</summary>
+/// <summary>工程列表的一行。文字在 Core 的 ProjectListRow 里。</summary>
 public sealed class ProjectViewModel(ProjectEntry entry)
 {
-    public ProjectEntry Entry { get; } = entry;
-    public string Name => Entry.Name;
-    public string Folder => Entry.Folder;
-    public string HostText => ProjectParser.HostName(Entry.Host);
-    public DateTime Modified => Entry.ModifiedUtc;
-    public string ModifiedText => Entry.ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd");
-    public int Versions => Entry.Versions;
-    public int EffectCount => Entry.EffectCount;
-    public int MissingCount => Entry.MissingCount;
-    public bool Failed => Entry.Status == ProjectScanStatus.Failed;
-
-    public string MissingText => Failed ? "读取失败" : MissingCount > 0 ? $"缺 {MissingCount} 款" : "齐全";
-
-    public Brush MissingBrush => (Brush)Application.Current.FindResource(
-        Failed || MissingCount > 0 ? "Danger" : "Good");
-
-    public string SearchText => (Name + " " + Entry.Path + " " + string.Join(' ', Entry.Plugins.Select(p => p.Name))).ToLowerInvariant();
+    private readonly ProjectListRow _row = new(entry);
+    public ProjectEntry Entry => _row.Entry;
+    public string Name => _row.Name;
+    public string Folder => _row.Folder;
+    public string HostText => _row.HostText;
+    public DateTime Modified => _row.Modified;
+    public string ModifiedText => _row.ModifiedText;
+    public int Versions => _row.Versions;
+    public int EffectCount => _row.EffectCount;
+    public int MissingCount => _row.MissingCount;
+    public bool Failed => _row.Failed;
+    public string MissingText => _row.MissingText;
+    public Brush MissingBrush => (Brush)Application.Current.FindResource(_row.Warn ? "Danger" : "Good");
+    public string SearchText => _row.SearchText;
 }
 
 /// <summary>工程详情里的一款插件。</summary>
-public sealed class ProjectLineViewModel(ProjectPluginLine line, PluginRow? remembered = null)
+public sealed class ProjectLineViewModel(ProjectLineRow row)
 {
-    public ProjectPluginLine Line { get; } = line;
+    public ProjectLineRow Row { get; } = row;
 
     /// <summary>缺失的插件以前移进垃圾桶并卸载过时，提示当时的评价。</summary>
-    public Visibility RememberedVisibility => IsMissing && remembered != null ? Visibility.Visible : Visibility.Collapsed;
-    public string RememberedText => remembered == null ? "" : "以前移进垃圾桶并卸载了。" + TrashMemory.Describe(remembered);
-    public string Name => Line.Name;
-    public string InstancesText => Line.Instances > 1 ? $"× {Line.Instances}" : "";
-    public bool IsMissing => Line.State == ProjectPluginState.Missing;
+    public Visibility RememberedVisibility => Row.ShowRemembered ? Visibility.Visible : Visibility.Collapsed;
+    public string RememberedText => Row.RememberedText;
+    public string Name => Row.Name;
+    public string InstancesText => Row.InstancesText;
+    public bool IsMissing => Row.IsMissing;
     public Visibility MissingVisibility => IsMissing ? Visibility.Visible : Visibility.Collapsed;
 
     public Brush NameBrush => (Brush)Application.Current.FindResource(IsMissing ? "Danger" : "Text");
 }
 
 /// <summary>缺失汇总的一行。</summary>
-public sealed class MissingViewModel(MissingPluginSummary summary, PluginRow? remembered = null)
+public sealed class MissingViewModel(MissingListRow row)
 {
-    public MissingPluginSummary Summary { get; } = summary;
-    public string Name => Summary.Name;
-
-    /// <summary>以前移进垃圾桶并卸载过的，名字后面标一下。</summary>
-    public string NameText => remembered == null ? Name : Name + "  · 曾差评";
-    public string? RememberedText => remembered == null ? null : "以前移进垃圾桶并卸载了。" + TrashMemory.Describe(remembered);
-    public int ProjectCount => Summary.Projects.Count;
-    public string LatestText => Summary.Projects[0].Name;
-    public DateTime Latest => Summary.Projects[0].ModifiedUtc;
-    public string LatestDateText => Latest.ToLocalTime().ToString("yyyy-MM-dd");
-    public string SearchText => (Name + " " + string.Join(' ', Summary.Projects.Select(p => p.Name))).ToLowerInvariant();
+    public MissingListRow Row { get; } = row;
+    public MissingPluginSummary Summary => Row.Summary;
+    public string Name => Row.Name;
+    public string NameText => Row.NameText;
+    public string? RememberedText => Row.RememberedText;
+    public int ProjectCount => Row.ProjectCount;
+    public string LatestText => Row.LatestText;
+    public DateTime Latest => Row.Latest;
+    public string LatestDateText => Row.LatestDateText;
+    public string SearchText => Row.SearchText;
 }
 
 /// <summary>添加插件时候选列表里的一款插件。</summary>
@@ -73,17 +69,19 @@ public sealed class FavoritePluginViewModel(PluginRow row, PluginUsage? usage)
 /// <summary>闲置报告的一行。</summary>
 public sealed class IdleViewModel(IdlePlugin idle)
 {
-    public IdlePlugin Idle { get; } = idle;
-    public PluginRow Row => Idle.Plugin;
-    public string Name => Row.Name;
-    public string Vendor => Row.Vendor.Length > 0 ? Row.Vendor : "未知";
-    public string TagsText => Row.Tags.Count > 0 ? string.Join("、", Row.Tags) : "未分类";
-    public int Rating => Row.User.Rating;
-    public string RatingText => Rating > 0 ? new string('★', Rating) : "";
-    public int ProjectCount => Idle.Usage?.Projects ?? 0;
-    public DateTime LastUsed => Idle.Usage?.LastUsedUtc ?? DateTime.MinValue;
-    public string LastUsedText => Idle.Usage == null ? "从未出现" : Idle.Usage.LastUsedUtc.ToLocalTime().ToString("yyyy-MM-dd");
-    public string SearchText => (Name + " " + Row.Vendor + " " + TagsText).ToLowerInvariant();
+    private readonly IdleListRow _row = new(idle);
+    public IdleListRow Info => _row;
+    public IdlePlugin Idle => _row.Idle;
+    public PluginRow Row => _row.Row;
+    public string Name => _row.Name;
+    public string Vendor => _row.Vendor;
+    public string TagsText => _row.TagsText;
+    public int Rating => _row.Rating;
+    public string RatingText => _row.RatingText;
+    public int ProjectCount => _row.ProjectCount;
+    public DateTime LastUsed => _row.LastUsed;
+    public string LastUsedText => _row.LastUsedText;
+    public string SearchText => _row.SearchText;
 }
 
 public static class UsageLabels

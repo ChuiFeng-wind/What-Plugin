@@ -1,0 +1,169 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:core="clr-namespace:WhatPlugin.Core;assembly=WhatPlugin.Core"
+             xmlns:local="clr-namespace:WhatPlugin.Desktop"
+             x:Class="WhatPlugin.Desktop.ProjectsView">
+    <!-- 和 Windows 版一样：工程文件夹、筛选行，下面是文件夹树、工程列表（或缺失汇总）和详情。工程文件只读。 -->
+    <Grid RowDefinitions="Auto,Auto,*" Margin="0,0,0,18">
+        <ItemsControl x:Name="FolderList" Margin="0,0,0,10" AutomationProperties.Name="工程文件夹">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Margin="0,0,6,4" Padding="10,2,2,2">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding}" FontSize="12" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                            <Button Classes="Ghost RemoveFolder" Tag="{Binding}" Margin="4,0,0,0" Width="24" Height="24" Padding="0"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                    ToolTip.Tip="不再读取这个文件夹，工程文件不受影响">
+                                <mi:MaterialIcon Kind="Close" Width="12" Height="12"/>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
+            <TextBox x:Name="SearchBox" PlaceholderText="搜索工程名、路径或插件名" AutomationProperties.Name="搜索工程"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
+                <RadioButton x:Name="SegmentAll" Classes="Segment" GroupName="ProjectSegment" Content="全部工程" IsChecked="True" Margin="0,0,6,0"/>
+                <RadioButton x:Name="SegmentMissing" Classes="Segment" GroupName="ProjectSegment" Content="有缺失" Margin="0,0,6,0" AutomationProperties.Name="有缺失"/>
+                <RadioButton x:Name="SegmentSummary" Classes="Segment" GroupName="ProjectSegment" Content="缺失汇总" AutomationProperties.Name="缺失汇总"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button x:Name="TreeToggle" Classes="Ghost" Height="34" Margin="6,0,0,0" IsVisible="False"/>
+                <Button x:Name="ClearIgnoredButton" Content="恢复忽略的名称" Classes="Ghost" Height="34" Margin="6,0,0,0" IsVisible="False"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,16,320">
+            <Border x:Name="TreeCard" Classes="Card" Width="204" Margin="0,0,14,0" Padding="6" IsVisible="False">
+                <TreeView x:Name="FolderTree" Classes="Folders" AutomationProperties.Name="工程文件夹分层">
+                    <TreeView.Styles>
+                        <Style Selector="TreeViewItem" x:DataType="local:ProjectFolderItem">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                        </Style>
+                    </TreeView.Styles>
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate x:DataType="local:ProjectFolderItem" ItemsSource="{Binding Children}">
+                            <DockPanel ToolTip.Tip="{Binding ToolTip}" Background="Transparent">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="6,0,4,0"/>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding MissingText}" IsVisible="{Binding HasMissing}" Foreground="{DynamicResource Danger}" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </Border>
+
+            <Border Grid.Column="1" Classes="Card" ClipToBounds="True">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Line}">
+                        <Panel>
+                            <Grid x:Name="ProjectHeader" ColumnDefinitions="2.4*,76,96,44,56,68">
+                                <TextBlock Text="工程" Classes="ColumnHeader" Margin="14,0,8,0" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="HostHeader" Grid.Column="1" Text="宿主" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="2" Text="最近修改" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="VersionsHeader" Grid.Column="3" Text="版本" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="EffectsHeader" Grid.Column="4" Text="效果器" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="5" Text="缺失" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                            </Grid>
+                            <Grid x:Name="MissingHeader" ColumnDefinitions="2*,72,1.4*,96" IsVisible="False">
+                                <TextBlock Text="缺失的插件" Classes="ColumnHeader" Margin="14,0,8,0" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="工程数" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="2" Text="最近用在" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="3" Text="日期" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                            </Grid>
+                        </Panel>
+                    </Border>
+                    <Panel>
+                        <ListBox x:Name="ProjectList" Classes="Plugins" AutomationProperties.Name="工程列表"/>
+                        <ListBox x:Name="MissingList" Classes="Plugins" AutomationProperties.Name="缺失汇总" IsVisible="False">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="core:MissingListRow">
+                                    <Grid ColumnDefinitions="2*,72,1.4*,96" Height="44" Background="Transparent">
+                                        <TextBlock Text="{Binding NameText}" ToolTip.Tip="{Binding RememberedText}" Margin="14,0,8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding ProjectCount}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding LatestText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding LatestDateText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False">
+                            <mi:MaterialIcon Kind="FolderOutline" Width="36" Height="36" Foreground="{DynamicResource LineStrong}"/>
+                            <TextBlock x:Name="EmptyText" Foreground="{DynamicResource Muted}" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Panel>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="3" Classes="Card">
+                <Panel>
+                    <StackPanel x:Name="DetailEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <mi:MaterialIcon Kind="FolderOutline" Width="32" Height="32" Foreground="{DynamicResource LineStrong}"/>
+                        <TextBlock Text="选择一行，查看用到的插件" Foreground="{DynamicResource Muted}" Margin="0,12,0,0"/>
+                    </StackPanel>
+
+                    <ScrollViewer x:Name="ProjectDetail" VerticalScrollBarVisibility="Auto" IsVisible="False">
+                        <StackPanel Margin="20,18,18,20">
+                            <TextBlock x:Name="DetailTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DetailMeta" Classes="SmallNote" Margin="0,3,0,0"/>
+                            <TextBlock x:Name="DetailPath" Classes="SmallNote" Margin="0,6,0,0"/>
+                            <Button x:Name="RevealButton" Classes="Ghost" HorizontalAlignment="Left" Margin="-10,6,0,0"/>
+                            <TextBlock x:Name="DetailError" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,8,0,0" IsVisible="False"/>
+
+                            <TextBlock Text="用到的效果器" Classes="FieldLabel"/>
+                            <ItemsControl x:Name="DetailLines" AutomationProperties.Name="工程用到的效果器">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="core:ProjectLineRow">
+                                        <DockPanel Margin="0,3">
+                                            <Button DockPanel.Dock="Right" Classes="Ghost IgnoreLine" Content="不算缺失" Tag="{Binding Name}" IsVisible="{Binding IsMissing}"
+                                                    Padding="8,2" Height="26" FontSize="12" ToolTip.Tip="这是宿主自带或不需要的插件，以后不再提示"/>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding InstancesText}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
+                                            <Border DockPanel.Dock="Left" Background="{DynamicResource DangerSoft}" CornerRadius="5" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center" IsVisible="{Binding IsMissing}">
+                                                <TextBlock Text="缺失" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                            </Border>
+                                            <Border DockPanel.Dock="Right" BorderBrush="{DynamicResource Danger}" BorderThickness="1" CornerRadius="5" Padding="6,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                    IsVisible="{Binding ShowRemembered}" ToolTip.Tip="{Binding RememberedText}">
+                                                <TextBlock Text="曾差评" FontSize="11" Foreground="{DynamicResource Danger}"/>
+                                            </Border>
+                                            <TextBlock Text="{Binding Name}" Classes.Missing="{Binding IsMissing}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                                <ItemsControl.Styles>
+                                    <Style Selector="TextBlock.Missing">
+                                        <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                                    </Style>
+                                </ItemsControl.Styles>
+                            </ItemsControl>
+                            <TextBlock x:Name="DetailNotes" Classes="SmallNote" Margin="0,10,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="MissingDetail" VerticalScrollBarVisibility="Auto" IsVisible="False">
+                        <StackPanel Margin="20,18,18,20">
+                            <TextBlock x:Name="MissingTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="MissingMeta" Classes="SmallNote" Margin="0,3,0,0"/>
+                            <Button x:Name="IgnoreMissingButton" Content="不算缺失" HorizontalAlignment="Left" Margin="0,10,0,0" ToolTip.Tip="这是宿主自带或不需要的插件，以后不再提示"/>
+                            <TextBlock Text="用到它的工程" Classes="FieldLabel"/>
+                            <ItemsControl x:Name="MissingProjects" AutomationProperties.Name="用到这款插件的工程">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock Text="{Binding}" Foreground="{DynamicResource TextDim}" Margin="0,3" TextTrimming="CharacterEllipsis"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Panel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

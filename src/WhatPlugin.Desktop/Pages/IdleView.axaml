@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:core="clr-namespace:WhatPlugin.Core;assembly=WhatPlugin.Core"
+             x:Class="WhatPlugin.Desktop.IdleView">
+    <!-- 和 Windows 版一样：筛选行和一张可以多选的列表。移入垃圾桶只是在软件里隐藏，文件不动。 -->
+    <Grid RowDefinitions="Auto,*" Margin="0,0,0,18">
+        <Grid ColumnDefinitions="*,Auto,110,Auto" Margin="0,0,0,12">
+            <TextBox x:Name="SearchBox" PlaceholderText="搜索插件名、厂家或分类" AutomationProperties.Name="搜索闲置插件"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
+                <RadioButton x:Name="SegmentAll" Classes="Segment" GroupName="IdleSegment" Content="全部" IsChecked="True" Margin="0,0,6,0"/>
+                <RadioButton x:Name="SegmentNever" Classes="Segment" GroupName="IdleSegment" Content="从未出现" Margin="0,0,6,0"/>
+                <RadioButton x:Name="SegmentOld" Classes="Segment" GroupName="IdleSegment" Content="很久没用"/>
+            </StackPanel>
+            <ComboBox x:Name="MonthsBox" Grid.Column="2" Margin="8,0,0,0" HorizontalAlignment="Stretch" AutomationProperties.Name="多久没用算闲置" ToolTip.Tip="多久没用算闲置"/>
+            <Button x:Name="TrashButton" Grid.Column="3" Classes="Danger" Height="34" Margin="8,0,0,0" IsEnabled="False"/>
+        </Grid>
+
+        <Border Grid.Row="1" Classes="Card" ClipToBounds="True">
+            <DockPanel>
+                <Border x:Name="Header" DockPanel.Dock="Top" Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Line}">
+                    <Grid ColumnDefinitions="2*,2*,96,90,110">
+                        <TextBlock Text="插件" Classes="ColumnHeader" Margin="14,0,8,0" HorizontalAlignment="Left"/>
+                        <TextBlock Grid.Column="1" Text="功能分类" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                        <TextBlock Grid.Column="2" Text="评分" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                        <TextBlock Grid.Column="3" Text="用过的工程" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                        <TextBlock Grid.Column="4" Text="最近使用" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                    </Grid>
+                </Border>
+                <Panel>
+                    <ListBox x:Name="IdleList" Classes="Plugins" SelectionMode="Multiple" AutomationProperties.Name="闲置插件">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="core:IdleListRow">
+                                <Grid ColumnDefinitions="2*,2*,96,90,110" Height="52" Background="Transparent">
+                                    <StackPanel VerticalAlignment="Center" Margin="14,0,8,0">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Vendor}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding TagsText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding RatingText}" Foreground="{DynamicResource Accent}" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding ProjectCount}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Text="{Binding LastUsedText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False">
+                        <mi:MaterialIcon Kind="ClockOutline" Width="36" Height="36" Foreground="{DynamicResource LineStrong}"/>
+                        <TextBlock x:Name="EmptyText" Foreground="{DynamicResource Muted}" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Panel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

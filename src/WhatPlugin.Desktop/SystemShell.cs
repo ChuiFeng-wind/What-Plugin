@@ -40,4 +40,36 @@ public static class SystemShell
             return "无法打开文件夹：" + error.Message;
         }
     }
+
+    /// <summary>打开文件夹窗口，不改动任何文件。</summary>
+    public static string? OpenFolder(string path)
+    {
+        if (!Directory.Exists(path))
+            return $"找不到文件夹：{path}";
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = false });
+            else
+                Process.Start(new ProcessStartInfo(OperatingSystem.IsMacOS() ? "open" : "xdg-open", [path]) { UseShellExecute = false });
+            return null;
+        }
+        catch (Exception error) when (error is Win32Exception or IOException or InvalidOperationException)
+        {
+            return "无法打开文件夹：" + error.Message;
+        }
+    }
+
+    /// <summary>
+    /// 定位工程文件，不启动宿主，避免工程被意外打开。文件不在了就打开它原来所在的文件夹。
+    /// reveal 和 openFolder 由调用方传入（测试换成记录下来的函数）。
+    /// </summary>
+    public static string? RevealProject(string path, Func<string, string?> reveal, Func<string, string?> openFolder)
+    {
+        if (File.Exists(path))
+            return reveal(path);
+        if (Path.GetDirectoryName(path) is { } folder && Directory.Exists(folder))
+            return openFolder(folder) ?? $"工程文件已经不在了，打开了它原来所在的文件夹：{folder}";
+        return $"找不到工程文件：{path}";
+    }
 }

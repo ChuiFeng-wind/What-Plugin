@@ -36,6 +36,7 @@ public partial class MainWindow : Window, IScanHost
     private readonly ScanEnvironment _environment;
     private CancellationTokenSource? _scanCancel;
     private IReadOnlyList<HostBlacklistEntry>? _hostBlacklist;
+    private ProjectReportResult? _projectReport;
     private readonly Dictionary<string, RadioButton> _navItems = [];
     private readonly Dictionary<string, TextBlock> _navCounts = [];
     private readonly Dictionary<string, Control> _pages = [];
@@ -67,11 +68,14 @@ public partial class MainWindow : Window, IScanHost
         RefreshCounts();
 
         RefreshHealth();
+        RefreshProjects();
 
         Navigate("Plugins");
         Closing += (_, _) =>
         {
             _scanCancel?.Cancel();
+            if (Projects is { IsScanning: true } projects)
+                projects.CancelScan();
             Library(CurrentPage)?.SaveCurrent();
         };
     }
@@ -210,11 +214,19 @@ public partial class MainWindow : Window, IScanHost
             RefreshHealth();
             StatusText.Text = health.Summary;
         }
+        if (Projects is { } projectPage && key == "Projects" && !projectPage.IsScanning)
+            StatusText.Text = projectPage.Status;
+        if (Idle is { } idle && key == "Idle")
+            StatusText.Text = idle.Summary;
     }
 
     public SettingsView? Settings => _pages.GetValueOrDefault(SettingsPage.Key) is PageFrame { Content: SettingsView view } ? view : null;
 
     public HealthView? Health => _pages.GetValueOrDefault("Health") is PageFrame { Content: HealthView view } ? view : null;
+
+    public ProjectsView? Projects => _pages.GetValueOrDefault("Projects") is PageFrame { Content: ProjectsView view } ? view : null;
+
+    public IdleView? Idle => _pages.GetValueOrDefault("Idle") is PageFrame { Content: IdleView view } ? view : null;
 
     /// <summary>插件库或垃圾桶页面；别的页面返回 null。</summary>
     public PluginLibraryView? Library(string key) =>
@@ -235,7 +247,12 @@ public partial class MainWindow : Window, IScanHost
             var frame = new PageFrame(definition.Label, definition.Subtitle, library);
             library.SubtitleChanged += text => frame.Subtitle = text;
             library.StatusChanged += text => StatusText.Text = text;
-            library.CountsChanged += RefreshCounts;
+            // 移入或恢复会改变闲置报告。
+            library.CountsChanged += () =>
+            {
+                RefreshCounts();
+                RefreshProjects();
+            };
             return frame;
         }
         if (key == "Health")
@@ -245,6 +262,41 @@ public partial class MainWindow : Window, IScanHost
             health.SubtitleChanged += text => frame.Subtitle = text;
             health.StatusChanged += text => StatusText.Text = text;
             health.OpenPlugin += ShowPlugin;
+            return frame;
+        }
+        if (key == "Projects")
+        {
+            var projects = new ProjectsView(_database);
+            var frame = new PageFrame(definition.Label, definition.Subtitle, projects, projects.Actions);
+            projects.StatusChanged += text => StatusText.Text = text;
+            projects.ScanningChanged += scanning =>
+            {
+                ScanProgress.IsVisible = scanning || IsScanning;
+                ScanProgress.Value = 0;
+            };
+            projects.ProgressChanged += (done, total) =>
+            {
+                ScanProgress.Maximum = Math.Max(total, 1);
+                ScanProgress.Value = done;
+            };
+            projects.ReportChanged += RefreshProjects;
+            projects.Show(ProjectReport);
+            return frame;
+        }
+        if (key == "Idle")
+        {
+            var idle = new IdleView(_database);
+            var frame = new PageFrame(definition.Label, IdleView.Subtitle, idle);
+            idle.StatusChanged += text => StatusText.Text = text;
+            idle.OpenPlugin += ShowPlugin;
+            idle.RowsChanged += () => SetIdleCount(idle.AllRows.Count);
+            idle.Trashed += () =>
+            {
+                RefreshCounts();
+                RefreshProjects();
+                RefreshHealth();
+            };
+            idle.Show(ProjectReport);
             return frame;
         }
         return new PageFrame(definition.Label, definition.Subtitle, new PendingView(definition.Stage));
@@ -269,6 +321,26 @@ public partial class MainWindow : Window, IScanHost
         _navCounts["Health"].Text = report.NeedsAttention > 0 ? report.NeedsAttention.ToString() : "";
         Health?.Show(report, UpdateGuide.Build(rows));
     }
+
+    // ---------- 工程和闲置报告 ----------
+
+    private ProjectReportResult ProjectReport => _projectReport ??= ProjectListing.Load(_database);
+
+    /// <summary>工程、垃圾桶或安装情况变化后都要重算：缺失和闲置都依赖它们，侧边栏的数字也是。</summary>
+    public void RefreshProjects()
+    {
+        _projectReport = ProjectListing.Load(_database);
+        _navCounts["Projects"].Text = _projectReport.Projects.Count > 0 ? _projectReport.Projects.Count.ToString() : "";
+        Projects?.Show(_projectReport);
+        if (Idle is { } idle)
+            idle.Show(_projectReport);
+        else
+            SetIdleCount(Core.ProjectReport.FindIdle(_database.LoadEffects(), _projectReport.Usage, IdleListing.DefaultMonths, DateTime.UtcNow).Count);
+    }
+
+    /// <summary>没扫描过工程时不显示闲置的数量（那时所有插件都算“从未出现”）。</summary>
+    private void SetIdleCount(int count) =>
+        _navCounts["Idle"].Text = _projectReport is { Projects.Count: > 0 } && count > 0 ? count.ToString() : "";
 
     // ---------- 扫描 ----------
 
@@ -311,6 +383,7 @@ public partial class MainWindow : Window, IScanHost
             Library("Blacklist")?.Load();
             RefreshCounts();
             RefreshHealth();
+            RefreshProjects();
         }
         Settings?.Refresh();
         StatusText.Text = outcome.Message;
@@ -320,7 +393,7 @@ public partial class MainWindow : Window, IScanHost
 
     private void SetScanning(bool scanning)
     {
-        ScanProgress.IsVisible = scanning;
+        ScanProgress.IsVisible = scanning || Projects is { IsScanning: true };
         ScanProgress.Value = 0;
         ImportButton.IsEnabled = !scanning;
         Settings?.SetScanning(scanning);
@@ -339,6 +412,9 @@ public partial class MainWindow : Window, IScanHost
     /// <summary>DAW 里的查询窗口打开时直接用这份配色（只在用默认数据库时写，测试库不影响它）。</summary>
     private void PublishLookupTheme() =>
         LookupExport.PublishTheme(_databasePath, PluginDatabase.DefaultPath, ThemeManager.Current);
+
+    /// <summary>侧边栏上的数字（测试检查用）。</summary>
+    public string NavCount(string key) => _navCounts[key].Text ?? "";
 
     public void RefreshCounts()
     {

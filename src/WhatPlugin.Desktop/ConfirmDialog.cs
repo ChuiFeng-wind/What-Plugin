@@ -5,10 +5,12 @@ using Avalonia.Media;
 
 namespace WhatPlugin.Desktop;
 
-/// <summary>确认对话框：标题、一段说明、取消和确认两个按钮，和 Windows 版的 Dialogs.Confirm 一样。</summary>
+/// <summary>确认对话框：标题、一段说明、取消和确认两个按钮，和 Windows 版的 Dialogs.Confirm 一样。可以带一个输入框（Dialogs.Prompt）。</summary>
 public sealed class ConfirmDialog : Window
 {
-    private ConfirmDialog(string title, string message, string confirm, bool danger)
+    private readonly TextBox? _input;
+
+    private ConfirmDialog(string title, string message, string confirm, bool danger, string? input = null)
     {
         Title = title;
         Width = 420;
@@ -23,8 +25,8 @@ public sealed class ConfirmDialog : Window
 
         var ok = new Button { Content = confirm, Classes = { danger ? "Danger" : "Primary" }, MinWidth = 76, Margin = new Thickness(6, 0, 0, 0), IsDefault = true };
         var cancel = new Button { Content = "取消", Classes = { "Ghost" }, IsCancel = true };
-        ok.Click += (_, _) => Close(true);
-        cancel.Click += (_, _) => Close(false);
+        ok.Click += (_, _) => Close(_input == null ? true : _input.Text ?? "");
+        cancel.Click += (_, _) => Close(null);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) };
         buttons.Children.Add(cancel);
@@ -33,10 +35,20 @@ public sealed class ConfirmDialog : Window
         var body = new StackPanel { Margin = new Thickness(24, 22, 24, 18) };
         body.Children.Add(new TextBlock { Text = title, Classes = { "SectionTitle" }, TextWrapping = TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text = message, Classes = { "SmallNote" }, Margin = new Thickness(0, 8, 0, 0) });
+        if (input != null)
+        {
+            _input = new TextBox { Text = input, Margin = new Thickness(0, 12, 0, 0) };
+            body.Children.Add(_input);
+            Opened += (_, _) => _input.Focus();
+        }
         body.Children.Add(buttons);
         Content = body;
     }
 
     public static async Task<bool> Show(Window owner, string title, string message, string confirm, bool danger = false) =>
-        await new ConfirmDialog(title, message, confirm, danger).ShowDialog<bool?>(owner) == true;
+        await new ConfirmDialog(title, message, confirm, danger).ShowDialog<object?>(owner) is true;
+
+    /// <summary>带输入框的确认，可以留空。取消返回 null。</summary>
+    public static async Task<string?> Prompt(Window owner, string title, string message, string confirm, string text = "", bool danger = false) =>
+        await new ConfirmDialog(title, message, confirm, danger, text).ShowDialog<object?>(owner) as string;
 }

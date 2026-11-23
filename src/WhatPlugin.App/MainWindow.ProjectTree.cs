@@ -9,8 +9,8 @@ namespace WhatPlugin.App;
 /// <summary>工程页左侧的文件夹树。只影响显示，不改动任何文件。</summary>
 public partial class MainWindow
 {
-    private const string CollapsedFoldersSetting = "projects.collapsedFolders";
-    private const string ProjectTreeVisibleSetting = "projects.treeVisible";
+    private const string CollapsedFoldersSetting = ProjectFolderTree.CollapsedSetting;
+    private const string ProjectTreeVisibleSetting = ProjectFolderTree.VisibleSetting;
 
     private string? _projectFolderFilter;
     private HashSet<string>? _collapsedFolders;
