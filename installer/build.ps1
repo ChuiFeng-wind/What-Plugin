@@ -1,11 +1,13 @@
 # 从源码生成 dist\app、dist\VST3 和安装包。用 PowerShell 7 运行：pwsh installer\build.ps1
 # -TestRoot 另外生成一个不需要管理员权限的试装版，放在那个文件夹里。
+# 1.3.3 起 Windows 版也用跨平台界面（WhatPlugin.Desktop）。-Wpf 打旧界面（WhatPlugin.App），只留一个版本备用。
 param(
     [string]$CMake = 'F:\DevTools\cmake\cmake-4.4.4-windows-x86_64\bin\cmake.exe',
     [string]$VsInstance = 'F:/DevTools/VSBuildTools',
     [string]$Vst3Sdk = 'F:\DevTools\vst3sdk',
     [string]$Iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
-    [string]$TestRoot = ''
+    [string]$TestRoot = '',
+    [switch]$Wpf
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
@@ -26,14 +28,20 @@ dotnet test tests\WhatPlugin.Desktop.Tests -nologo --verbosity quiet
 
 Remove-Item dist -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force dist\app, dist\VST3 | Out-Null
-foreach ($project in 'WhatPlugin.App', 'WhatPlugin.Cli') {
+$ui = if ($Wpf) { 'WhatPlugin.App' } else { 'WhatPlugin.Desktop' }
+foreach ($project in $ui, 'WhatPlugin.Cli') {
     dotnet publish "src\$project" -c Release -r win-x64 --self-contained true -o dist\app -nologo --verbosity quiet `
         -p:SatelliteResourceLanguages=en -p:DebugType=none
 }
+# 程序名保持 WhatPlugin.exe：快捷方式、安装包、查询插件和用户习惯都认这个名字，数据库和设置也还在原来的位置。
+# 程序集名不改（界面资源地址 avares://WhatPlugin.Desktop/ 用的是它），只改启动程序的文件名：
+# 启动程序里记的是 WhatPlugin.Desktop.dll，改名不影响启动。
+if (-not $Wpf) { Rename-Item dist\app\WhatPlugin.Desktop.exe WhatPlugin.exe }
 # -Force：插件文件夹里的 desktop.ini 是隐藏文件，不加时会漏掉（它让文件夹显示插件图标）。
 Copy-Item 'build\plugin\VST3\Release\WhatPluginLookup.vst3' dist\VST3 -Recurse -Force
 
-# 成就包单独打包，只要它自己的 dll：WhatPlugin.Core 用主程序里的那份。
+# 成就包单独打包，只要它自己的 dll：WhatPlugin.Core、Avalonia 和图标库都用主程序里的那份。
+# 1.3.3 起成就包是 Avalonia 界面，旧界面（-Wpf）加载不了，会提示版本不匹配。
 # 成就包不在公开仓库里，没有它的源码时只打不带成就的安装包。
 $withAchievements = Test-Path src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj
 if ($withAchievements) {

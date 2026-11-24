@@ -112,22 +112,26 @@ public sealed class UninstallDialog : Window
 
         private void ShowDetail()
         {
-            // 跨平台版不读取“已安装的应用”。
-            _detail.Text = UninstallOptions.Detail(Plan, Option, checkedPrograms: false);
+            // 只有 Windows 上会查“已安装的应用”。
+            _detail.Text = UninstallOptions.Detail(Plan, Option, checkedPrograms: OperatingSystem.IsWindows());
             _detail.IsVisible = _detail.Text.Length > 0;
         }
     }
 }
 
-public enum WavesAnswer { Cancel, SkipWaves }
+public enum WavesAnswer { Cancel, SkipWaves, FullTool }
 
-/// <summary>选中 Waves 时的说明。普通卸载碰不得 WaveShell，所以这里不动任何文件。</summary>
+/// <summary>
+/// 选中 Waves 时的说明。普通卸载碰不得 WaveShell，所以这里不动任何文件。
+/// Windows 上可以转到 Waves 完全卸载工具。
+/// </summary>
 public sealed class WavesNoticeDialog : Window
 {
     public WavesNoticeDialog(IReadOnlyList<PluginRow> waves, int otherCount)
     {
         DialogKit.Setup(this, "选中了 Waves 插件", 500);
-        var body = DialogKit.Body("选中了 Waves 插件", RemovalText.WavesMessage(waves, fullTool: false));
+        var fullTool = OperatingSystem.IsWindows();
+        var body = DialogKit.Body("选中了 Waves 插件", RemovalText.WavesMessage(waves, fullTool));
         var error = DialogKit.Error();
         body.Children.Add(error);
 
@@ -141,7 +145,15 @@ public sealed class WavesNoticeDialog : Window
             else
                 DialogKit.Show(error, problem);
         };
-        var buttons = new List<Control> { central, DialogKit.Cancel(this) };
+        var buttons = new List<Control> { central };
+        if (fullTool)
+        {
+            var full = new Button { Content = "完全卸载全部 Waves", Classes = { "Ghost" }, Margin = new Thickness(6, 0, 0, 0) };
+            AutomationProperties.SetAutomationId(full, "WavesFullUninstall");
+            full.Click += (_, _) => Close(WavesAnswer.FullTool);
+            buttons.Add(full);
+        }
+        buttons.Add(DialogKit.Cancel(this));
         if (otherCount > 0)
         {
             var skip = DialogKit.Ok($"跳过 Waves，继续其余 {otherCount} 款");

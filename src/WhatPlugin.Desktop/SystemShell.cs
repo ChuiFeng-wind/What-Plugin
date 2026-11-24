@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using WhatPlugin.Core;
 
 namespace WhatPlugin.Desktop;
 
@@ -95,6 +96,27 @@ public static class SystemShell
         catch (Exception error) when (error is Win32Exception or IOException or InvalidOperationException)
         {
             return "打开失败：" + error.Message;
+        }
+    }
+}
+
+/// <summary>运行“已安装的应用”里登记的卸载命令（Windows），不加静默参数，用户在官方窗口里操作。</summary>
+public static class UninstallerLauncher
+{
+    /// <returns>失败原因，成功时返回 null。</returns>
+    public static string? Start(InstalledProgram program)
+    {
+        var command = UninstallCommand.Parse(program.UninstallCommand);
+        if (command == null)
+            return "卸载命令无法识别：" + program.UninstallCommand;
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(command.Value.FileName, command.Value.Arguments) { UseShellExecute = true });
+            return null;
+        }
+        catch (Win32Exception error)
+        {
+            return error.NativeErrorCode == 1223 ? "你取消了管理员授权。" : $"启动失败：{error.Message}";
         }
     }
 }

@@ -149,6 +149,10 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: unchecked
 ; 只删除这个软件自己的旧插件。名字和新插件不同但 ID 相同，留着 DAW 里会出现冲突。
 Type: filesandordirs; Name: "{#Vst3Folder}\{#LegacyVst3Name}"; Tasks: vst3; Check: InstallVst3
 Type: filesandordirs; Name: "{#Vst3Folder}\{#OldVst3Name}"; Tasks: vst3; Check: InstallVst3
+; 1.3.2 及以前旧界面（WPF）自己的文件。1.3.3 起 WhatPlugin.exe 启动的是 WhatPlugin.Desktop.dll，这几个不再用到。
+Type: files; Name: "{app}\WhatPlugin.dll"
+Type: files; Name: "{app}\WhatPlugin.deps.json"
+Type: files; Name: "{app}\WhatPlugin.runtimeconfig.json"
 #ifndef TestInstall
 ; 旧名字的快捷方式，指向的旧目录升级后会删掉。
 Type: files; Name: "{autoprograms}\{#OldDirName}.lnk"

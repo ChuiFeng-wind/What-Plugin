@@ -73,6 +73,18 @@
             </Border>
 
             <Border Classes="Card" Padding="20,18" Margin="0,0,0,12">
+                <DockPanel>
+                    <Button x:Name="ShowOnboardingButton" DockPanel.Dock="Right" Content="重新查看" VerticalAlignment="Top"
+                            AutomationProperties.Name="重新查看新手指引"/>
+                    <StackPanel>
+                        <TextBlock Text="新手指引" Classes="SectionTitle"/>
+                        <TextBlock Classes="SmallNote" Margin="0,3,12,0" TextWrapping="Wrap"
+                                   Text="第一次打开时的欢迎页和左侧导航的逐项介绍。导览时按 Enter 或 → 下一步，← 上一步，Esc 退出。"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <Border Classes="Card" Padding="20,18" Margin="0,0,0,12">
                 <StackPanel>
                     <DockPanel>
                         <Button x:Name="ClearUsageButton" DockPanel.Dock="Right" Content="清空记录" Classes="Ghost" VerticalAlignment="Top"
@@ -85,6 +97,7 @@
                     </DockPanel>
                     <CheckBox x:Name="UsageEnabledBox" Content="记录使用统计" HorizontalAlignment="Left"/>
                     <TextBlock x:Name="UsageSummary" Classes="SmallNote" Margin="0,8,0,0"/>
+                    <TextBlock x:Name="ExtensionSummaryText" Classes="SmallNote" Margin="0,4,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 
@@ -173,6 +186,19 @@
             </Border>
 
             <!-- Mac 版：把应用里带的查询插件装到当前用户的 VST3 文件夹。Windows 由安装程序装，这张卡片不显示。 -->
+            <!-- Windows 版：卸载全部 Waves。Mac 上不显示。 -->
+            <Border x:Name="WavesToolCard" Classes="Card" Padding="20,18" Margin="0,12,0,0" IsVisible="False">
+                <DockPanel>
+                    <Button x:Name="WavesToolButton" DockPanel.Dock="Right" Content="打开工具" VerticalAlignment="Top"
+                            AutomationProperties.Name="打开 Waves 完全卸载工具"/>
+                    <StackPanel>
+                        <TextBlock Text="Waves 完全卸载工具" Classes="SectionTitle"/>
+                        <TextBlock Classes="SmallNote" Margin="0,3,12,0" TextWrapping="Wrap"
+                                   Text="卸载全部 Waves，并清理已知位置的残留。打开后先只读检查，可以逐项选择保留授权、预设、设置和数据。"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
             <Border x:Name="LookupCard" Classes="Card" Padding="20,18" Margin="0,12,0,0" IsVisible="False">
                 <StackPanel>
                     <DockPanel>

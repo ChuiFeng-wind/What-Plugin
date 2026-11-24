@@ -60,5 +60,31 @@
                 </DockPanel>
             </Border>
         </Grid>
+
+        <!-- 新手导览：半透明遮罩挖空当前导航项，气泡在它右边。平时隐藏。 -->
+        <Canvas x:Name="TourLayer" Grid.ColumnSpan="2" IsVisible="False" Background="Transparent">
+            <Path x:Name="TourShade" Fill="#8C0B1016"/>
+            <Border x:Name="TourRing" BorderBrush="{DynamicResource Accent}" BorderThickness="2" CornerRadius="10" IsHitTestVisible="False"/>
+            <Panel x:Name="TourBubble" Width="330">
+                <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1"
+                        CornerRadius="12" Padding="18,16,18,14" BoxShadow="0 8 28 0 #40000000">
+                    <StackPanel>
+                        <TextBlock x:Name="TourProgress" FontSize="12" Foreground="{DynamicResource Accent}" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="TourTitle" FontSize="16" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="TourBody" Foreground="{DynamicResource TextDim}" TextWrapping="Wrap" LineHeight="20" Margin="0,6,0,0"/>
+                        <TextBlock x:Name="TourScanNote" Classes="SmallNote" Text="插件正在后台扫描，进度显示在窗口底部。" TextWrapping="Wrap" Margin="0,8,0,0" IsVisible="False"/>
+                        <DockPanel Margin="0,16,0,0">
+                            <Button x:Name="TourSkipButton" DockPanel.Dock="Left" Content="跳过" Classes="Ghost"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button x:Name="TourBackButton" Content="上一步" Classes="Ghost" Margin="0,0,6,0"/>
+                                <Button x:Name="TourNextButton" Content="下一步" Classes="Primary" MinWidth="76"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+                <Path x:Name="TourArrow" Data="M7,0 L0,8 L7,16 Z" Fill="{DynamicResource Surface}"
+                      HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+            </Panel>
+        </Canvas>
     </Grid>
 </Window>

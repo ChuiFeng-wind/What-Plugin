@@ -282,7 +282,8 @@ public sealed class ScanHealthTests : IDisposable
         var box = settings.FindControl<CheckBox>("UsageEnabledBox")!;
         var summary = settings.FindControl<TextBlock>("UsageSummary")!;
         Assert.True(box.IsChecked);
-        Assert.Equal("正在记录。已记下 1 条。", summary.Text);
+        // 打开窗口时记一次启动（和 Windows 版一样），加上扫描那条共 2 条。
+        Assert.Equal("正在记录。已记下 2 条。", summary.Text);
 
         box.IsChecked = false;
         Settle(window);
@@ -293,7 +294,7 @@ public sealed class ScanHealthTests : IDisposable
         settings.Confirm = (_, _, _) => Task.FromResult(false);
         Click(settings, "ClearUsageButton");
         Settle(window);
-        Assert.Equal(1, _database.CountUsageEvents());
+        Assert.Equal(2, _database.CountUsageEvents());
 
         settings.Confirm = (_, _, _) => Task.FromResult(true);
         Click(settings, "ClearUsageButton");

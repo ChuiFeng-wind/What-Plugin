@@ -22,7 +22,8 @@ public partial class App : Application
             HostStock.Current = HostStock.Load(DawLocations.Default);
 
             var database = new PluginDatabase(databasePath);
-            desktop.MainWindow = new MainWindow(database, databasePath);
+            // 新用户第一次打开时弹欢迎窗口；用 --db 指定数据库时不弹。
+            desktop.MainWindow = new MainWindow(database, databasePath) { AutoOnboarding = at < 0 };
             desktop.Exit += (_, _) => database.Dispose();
         }
         base.OnFrameworkInitializationCompleted();

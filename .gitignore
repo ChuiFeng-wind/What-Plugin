@@ -12,6 +12,7 @@ build/
 
 # 打包好的安装包和发布目录，放到 GitHub Release 里备份，不放进代码历史
 dist/
+dist-mac/
 installer/Output/
 
 # 备份导出文件可能含加密的账号密码

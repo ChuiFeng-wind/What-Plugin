@@ -83,10 +83,20 @@ public sealed class RemovalTests : IDisposable
         Directory.Delete(_dir, recursive: true);
     }
 
+    private readonly List<InstalledProgram> _programs = [];
+    private readonly List<string> _started = [];
+
     private MainWindow Open()
     {
         var window = new MainWindow(_database, _dbPath, _env.Scan) { Width = 1440, Height = 900 };
         window.Removal.Trash = _trash;
+        // 不读真实的“已安装的应用”，也不真的启动卸载程序。
+        window.Removal.Programs = () => _programs;
+        window.Removal.StartUninstaller = program =>
+        {
+            _started.Add(program.Name);
+            return null;
+        };
         window.Show();
         Settle(window);
         Wait(window.RunScanAsync(new ScanRequest(false, ScanFormats.Main)), window);
@@ -236,6 +246,80 @@ public sealed class RemovalTests : IDisposable
         Assert.Equal("Pro-Q 4", Assert.Single(_dialogs.UninstallPlans[0]).Plugin.Name);
         Assert.True(Directory.Exists(waves));
         Assert.False(Directory.Exists(other));
+    }
+
+    [AvaloniaFact]
+    public void OfficialUninstallerRunsInsteadOfMovingFiles()
+    {
+        var bundle = _env.AddVst3("Pro-Q 4", "FabFilter");
+        var window = Open();
+        Blacklist("Pro-Q 4");
+        _programs.Add(new InstalledProgram("FabFilter Pro-Q 4", "FabFilter Pro-Q 4", "FabFilter", "4.0", "\"C:\\Fake\\unins000.exe\"", Path.GetDirectoryName(bundle)!, false));
+        var view = Trash(window);
+        view.SelectMany("Pro-Q 4");
+
+        _dialogs.Answers.Enqueue((Func<IReadOnlyList<UninstallPlan>, IReadOnlyList<UninstallChoice>?>)(plans =>
+        {
+            var plan = Assert.Single(plans);
+            Assert.NotNull(plan.Exact);
+            var official = UninstallOptions.For(plan)[0];
+            Assert.Equal(UninstallMethod.Official, official.Method);
+            return [new UninstallChoice(plan, official.Method, official.Program, "不用了")];
+        }));
+        // 官方卸载程序把插件删掉（只在临时目录里），用户点“重新扫描”继续。
+        Assert.StartsWith(Path.GetTempPath(), bundle, StringComparison.OrdinalIgnoreCase);
+        window.Removal.StartUninstaller = program =>
+        {
+            _started.Add(program.Name);
+            Directory.Delete(bundle, recursive: true);
+            return null;
+        };
+        _dialogs.Answers.Enqueue(true);
+        _dialogs.Answers.Enqueue(null);
+        Wait(view.UninstallSelectedAsync(), window);
+
+        Assert.Equal(["FabFilter Pro-Q 4"], _started);
+        Assert.Empty(_trash.Moved);
+        var record = Assert.Single(_database.LoadUninstallHistory());
+        Assert.Equal(UninstallWay.Official, record.Way);
+        Assert.Equal("不用了", record.Reason);
+    }
+
+    [AvaloniaFact]
+    public void WavesFullToolRescansAndRecordsHistory()
+    {
+        var waves = _env.AddVst3("CLA-76", "Waves");
+        _env.AddVst3("Pro-Q 4", "FabFilter");
+        var window = Open();
+        Blacklist("CLA-76");
+        var view = Trash(window);
+        view.SelectMany("CLA-76");
+
+        // 工具在临时目录里“卸载”了 Waves（真实的工具由 WavesToolTests 测）。
+        Assert.StartsWith(Path.GetTempPath(), waves, StringComparison.OrdinalIgnoreCase);
+        var opened = 0;
+        window.Removal.ShowWavesTool = () =>
+        {
+            opened++;
+            Directory.Delete(waves, recursive: true);
+            return Task.FromResult(true);
+        };
+        _dialogs.Answers.Enqueue(WavesAnswer.FullTool);
+        Wait(view.UninstallSelectedAsync(), window);
+
+        Assert.Equal(1, opened);
+        Assert.Empty(_dialogs.UninstallPlans);
+        var record = Assert.Single(_database.LoadUninstallHistory());
+        Assert.Equal("CLA-76", record.Name);
+        Assert.Equal(UninstallWay.WavesTool, record.Way);
+        // 写过移入原因，留在垃圾桶里显示为已卸载。
+        Assert.True(_database.LoadPlugins().Single(p => p.Name == "CLA-76").IsMissing);
+        Assert.Contains(_database.LoadPlugins(), p => p.Name == "Pro-Q 4");
+
+        // 工具没动文件（或在测试目录里跑）时不重新扫描、不记历史。
+        window.Removal.ShowWavesTool = () => Task.FromResult(false);
+        Wait(window.Removal.OpenWavesToolAsync(), window);
+        Assert.Single(_database.LoadUninstallHistory());
     }
 
     [AvaloniaFact]

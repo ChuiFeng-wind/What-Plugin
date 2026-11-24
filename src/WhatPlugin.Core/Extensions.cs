@@ -7,7 +7,13 @@ namespace WhatPlugin.Core;
 /// </summary>
 public static class ExtensionApi
 {
-    public const int Version = 2;
+    /// <summary>
+    /// 3：跨平台界面（Avalonia）。页面是 Avalonia 的控件，<see cref="IAppExtension.Glyph"/> 是 Material 图标名。
+    /// </summary>
+    public const int Version = 3;
+
+    /// <summary>旧的 Windows 版界面（WPF）认的版本：页面是 WPF 控件，图标是 Segoe 字符。</summary>
+    public const int WpfVersion = 2;
 
     public const string FolderName = "Extensions";
 }
@@ -36,7 +42,7 @@ public interface IAppExtension
     /// <summary>左侧导航里显示的名字。</summary>
     string Title { get; }
 
-    /// <summary>Segoe Fluent Icons 字符。</summary>
+    /// <summary>左侧导航的图标：Material 图标名（例如 "TrophyOutline"）。WPF 版是 Segoe Fluent Icons 字符。</summary>
     string Glyph { get; }
 
     /// <summary>导航右边的小字，例如“12/51”。变化时触发 <see cref="BadgeChanged"/>。</summary>
@@ -47,7 +53,7 @@ public interface IAppExtension
     /// <summary>在界面线程上调用一次。</summary>
     void Initialize(IExtensionHost host);
 
-    /// <summary>扩展的页面（WPF 的 FrameworkElement）。在界面线程上调用。</summary>
+    /// <summary>扩展的页面（Avalonia 的 Control，自己带标题；WPF 版是 FrameworkElement）。在界面线程上调用。</summary>
     object CreatePage();
 
     /// <summary>页面要显示了，可以刷新内容。</summary>

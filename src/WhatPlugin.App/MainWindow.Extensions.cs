@@ -92,7 +92,7 @@ public partial class MainWindow
                     _extensionProblems.Add($"{name}：文件里没有扩展");
                     continue;
                 }
-                if (extension.ApiVersion != ExtensionApi.Version)
+                if (extension.ApiVersion != ExtensionApi.WpfVersion)
                 {
                     _extensionProblems.Add($"{extension.Title}：和这个版本的主程序不匹配，请安装对应版本的{extension.Title}");
                     continue;

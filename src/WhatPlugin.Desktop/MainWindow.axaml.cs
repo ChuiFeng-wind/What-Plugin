@@ -57,10 +57,16 @@ public partial class MainWindow : Window, IScanHost
 
         ThemeManager.Apply(_database.GetSetting(ThemeManager.Setting));
         PublishLookupTheme();
-        // DAW 里的查询插件靠这个文件找到命令行工具（打包后在 .app 的 Contents/MacOS 里）。
-        // Windows 上仍由 Windows 版主程序写，免得两个版本互相改。
-        if (AppPlatform.IsMac)
-            LookupExport.PublishCliPath(_databasePath, PluginDatabase.DefaultPath, AppContext.BaseDirectory);
+        // 使用统计（成就要用）：每天第一次打开记一条。写不进去也不影响打开。
+        try
+        {
+            _database.RecordLaunch();
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+        }
+        // DAW 里的查询插件靠这个文件找到命令行工具（Windows 上在安装目录里，Mac 上在 .app 的 Contents/MacOS 里）。
+        LookupExport.PublishCliPath(_databasePath, PluginDatabase.DefaultPath, AppContext.BaseDirectory);
         SetupChrome();
 
         _navDivider = new Border { Height = 1, Margin = new(6, 10), IsHitTestVisible = false };
@@ -68,6 +74,7 @@ public partial class MainWindow : Window, IScanHost
         foreach (var page in Pages)
             _navItems[page.Key] = CreateNavItem(page);
         NavFixed.Children.Add(_navItems[SettingsPage.Key] = CreateNavItem(SettingsPage));
+        LoadExtensions();
         ApplyNavOrder();
         RefreshCounts();
 
@@ -95,6 +102,7 @@ public partial class MainWindow : Window, IScanHost
         {
             Rescan = RunScanAsync,
             IsScanning = () => IsScanning,
+            ShowWavesTool = ShowWavesToolAsync,
         };
         Removal.StatusChanged += text => StatusText.Text = text;
         Removal.Changed += () =>
@@ -107,6 +115,7 @@ public partial class MainWindow : Window, IScanHost
         };
 
         Navigate("Plugins");
+        InitializeOnboarding();
         Closing += (_, _) =>
         {
             _scanCancel?.Cancel();
@@ -122,6 +131,24 @@ public partial class MainWindow : Window, IScanHost
 
     /// <summary>删除多余版本、卸载垃圾桶里的插件、恢复文件。</summary>
     public RemovalActions Removal { get; }
+
+    /// <summary>
+    /// Waves 完全卸载工具。可用 --waves-test-root 指向假目录，界面流程可以完整跑一遍而不碰真实的 Waves。
+    /// 返回是否动过真实的文件（测试目录不算）。
+    /// </summary>
+    private async Task<bool> ShowWavesToolAsync()
+    {
+        if (!OperatingSystem.IsWindows())
+            return false;
+        var args = Environment.GetCommandLineArgs();
+        var index = Array.IndexOf(args, "--waves-test-root");
+        var test = index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+        var tool = new WavesToolWindow(test != null ? WavesEnvironment.ForTest(test) : WavesEnvironment.Real());
+        await tool.ShowDialog(this);
+        return tool.ChangedSomething && test == null;
+    }
+
+    public Task OpenWavesToolAsync() => Removal.OpenWavesToolAsync();
 
     /// <summary>把各页还在等待自动保存的内容写进数据库。</summary>
     private void FlushPages()
@@ -209,7 +236,8 @@ public partial class MainWindow : Window, IScanHost
 
     // ---------- 导航顺序（和 Windows 版共用保存格式） ----------
 
-    private IReadOnlyList<string> DefaultOrder => Pages.Select(p => p.Key).ToList();
+    /// <summary>默认顺序：内置页面，再接扩展（ext:标题），和 Windows 版一样。</summary>
+    private IReadOnlyList<string> DefaultOrder => Pages.Select(p => p.Key).Concat(_extensions.Keys).ToList();
 
     public List<string> NavKeys => NavList.Children.OfType<RadioButton>().Select(r => (string)r.Tag!).ToList();
 
@@ -278,6 +306,8 @@ public partial class MainWindow : Window, IScanHost
         }
         foreach (var other in _pages.Values)
             other.IsVisible = other == page;
+        if (_extensions.ContainsKey(key))
+            ShowExtensionPage(key);
         // 插件库和垃圾桶各是一页，在一页里移入或恢复后，另一页显示时要重新读。
         Library(key)?.Load();
         // 插件库里改了名、移进垃圾桶，或别处加了心愿单，回到笔记时重新读。
@@ -299,6 +329,8 @@ public partial class MainWindow : Window, IScanHost
             StatusText.Text = projectPage.Status;
         if (Idle is { } idle && key == "Idle")
             StatusText.Text = idle.Summary;
+        if (key == "Chains" && !IsScanning)
+            StatusText.Text = "混音笔记只是记录，不会写入 DAW";
         // 两页共用同一批记录：在一页里标记已买、移回心愿单，或者笔记里加了心愿，另一页显示时要重新读。
         if (Wishes is { } wishes && key == "Wishes")
         {
@@ -332,6 +364,8 @@ public partial class MainWindow : Window, IScanHost
 
     private Control CreatePage(string key)
     {
+        if (_extensions.TryGetValue(key, out var extension))
+            return CreateExtensionPage(extension);
         if (key == SettingsPage.Key)
         {
             var settings = new SettingsView(_database, _environment, this);

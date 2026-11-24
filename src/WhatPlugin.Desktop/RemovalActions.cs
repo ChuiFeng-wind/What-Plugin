@@ -5,7 +5,7 @@ namespace WhatPlugin.Desktop;
 /// <summary>
 /// 删除多余版本、卸载垃圾桶里的插件和恢复文件。只有这里会动插件文件，而且都要用户先确认；
 /// 文件只移到回收站（Mac 上是废纸篓），可以恢复。流程和 Windows 版一样，文字在 Core 的 RemovalText 里。
-/// 跨平台版不运行官方卸载程序，卸载方式只有“移到回收站”和“先不卸载”。
+/// Windows 上和 Windows 版一样，找到官方卸载程序时优先用它（在官方窗口里操作）；Mac 上只有“移到废纸篓”和“先不卸载”。
 /// </summary>
 public sealed class RemovalActions(PluginDatabase database, Func<IReadOnlyList<string>> pluginRoots)
 {
@@ -19,6 +19,13 @@ public sealed class RemovalActions(PluginDatabase database, Func<IReadOnlyList<s
 
     /// <summary>正在扫描时不能开始。</summary>
     public Func<bool> IsScanning { get; set; } = () => false;
+
+    /// <summary>“已安装的应用”里登记的卸载程序。只有 Windows 上有，测试换成假的列表。</summary>
+    public Func<IReadOnlyList<InstalledProgram>> Programs { get; set; } =
+        () => OperatingSystem.IsWindows() ? InstalledPrograms.Load() : [];
+
+    /// <summary>运行官方卸载命令（不加静默参数），返回失败原因。测试换成脚本，不真的启动。</summary>
+    public Func<InstalledProgram, string?> StartUninstaller { get; set; } = UninstallerLauncher.Start;
 
     public bool Busy { get; private set; }
 
@@ -35,6 +42,42 @@ public sealed class RemovalActions(PluginDatabase database, Func<IReadOnlyList<s
             return true;
         Status("正在扫描或卸载，请等它结束");
         return false;
+    }
+
+    /// <summary>
+    /// 打开 Waves 完全卸载工具（只在 Windows 上有），返回它是否动过文件。由主窗口提供，测试换成脚本。
+    /// 测试目录模式下返回 false：假目录里的变化不该影响插件库。
+    /// </summary>
+    public Func<Task<bool>>? ShowWavesTool { get; set; }
+
+    /// <summary>
+    /// Waves 完全卸载工具。卸载后重新扫描，原来在垃圾桶里、现在文件都不在的 Waves 插件记进卸载历史，
+    /// 和 Windows 版一样。
+    /// </summary>
+    public async Task OpenWavesToolAsync()
+    {
+        if (ShowWavesTool == null || !CanStart())
+            return;
+        Busy = true;
+        try
+        {
+            var trashBefore = database.LoadPlugins().Where(p => p.User.Hidden && !p.IsMissing).Select(p => p.Id).ToHashSet();
+            if (!await ShowWavesTool())
+                return;
+            await RescanAsync(recordMissing: false);
+            var gone = database.LoadPlugins()
+                .Where(p => RemovalPlanner.IsWaves(p) && p.Files.All(f => !RemovalPlanner.PathExists(f.Path)))
+                .ToList();
+            var now = DateTime.UtcNow;
+            database.AddUninstallRecords(gone.Where(p => trashBefore.Contains(p.Id))
+                .Select(p => UninstallHistory.From(p, UninstallWay.WavesTool, "", now)));
+            database.ForgetUninstalled(gone.Select(p => p.Id).ToList());
+            Changed?.Invoke();
+        }
+        finally
+        {
+            Busy = false;
+        }
     }
 
     private Task RescanAsync(bool recordMissing) =>
@@ -152,22 +195,50 @@ public sealed class RemovalActions(PluginDatabase database, Func<IReadOnlyList<s
 
         var waves = installed.Where(RemovalPlanner.IsWaves).ToList();
         var others = installed.Except(waves).ToList();
-        if (waves.Count > 0 && (await dialogs.WavesNotice(waves, others.Count) != WavesAnswer.SkipWaves || others.Count == 0))
-            return null;
+        if (waves.Count > 0)
+        {
+            var answer = await dialogs.WavesNotice(waves, others.Count);
+            if (answer == WavesAnswer.FullTool)
+            {
+                await OpenWavesToolAsync();
+                return null;
+            }
+            if (answer != WavesAnswer.SkipWaves || others.Count == 0)
+                return null;
+        }
 
-        // 跨平台版不读取“已安装的应用”，所以没有官方卸载程序可选。
-        var plans = RemovalPlanner.Plan(others, database.LoadPlugins(), [], usage);
+        var plans = RemovalPlanner.Plan(others, database.LoadPlugins(), Programs(), usage);
         var choices = await dialogs.Uninstall(plans);
         if (choices == null)
             return null;
-        var chosen = choices.Where(c => c.Method == UninstallMethod.RecycleFiles).ToList();
+        var chosen = choices.Where(c => c.Method != UninstallMethod.Skip).ToList();
         if (chosen.Count == 0)
             return null;
 
         Busy = true;
         try
         {
-            var moved = await MoveAsync(chosen.SelectMany(c => c.Plan.Files.Select(f => (c.Plan.Plugin, File: f))).ToList());
+            var recycle = chosen.Where(c => c.Method == UninstallMethod.RecycleFiles)
+                .SelectMany(c => c.Plan.Files.Select(f => (c.Plan.Plugin, File: f))).ToList();
+            IReadOnlyList<FileOpResult> moved = recycle.Count > 0 ? await MoveAsync(recycle) : [];
+
+            // 官方卸载程序一个一个打开，用户在官方窗口里操作完再继续。
+            var programs = chosen.Where(c => c.Method == UninstallMethod.Official).Select(c => c.Program!).DistinctBy(p => p.Key).ToList();
+            for (var i = 0; i < programs.Count; i++)
+            {
+                var program = programs[i];
+                var problem = StartUninstaller(program);
+                var last = i == programs.Count - 1;
+                var goOn = await dialogs.Confirm(problem == null ? "官方卸载程序已打开" : "没能打开官方卸载程序",
+                    (problem ?? $"请在“{program.Name}”的卸载窗口里完成操作。完成后再点下面的按钮。")
+                    + (last ? "" : $"\n\n接下来还有 {programs.Count - i - 1} 个卸载程序。"),
+                    last ? "重新扫描" : "下一个");
+                if (!goOn)
+                {
+                    Status("已停止。卸载程序完成后，可以到“设置”里重新扫描");
+                    return null;
+                }
+            }
             // 这次卸载的按选的方式和原因记进历史，扫描时不再当成“发现已不在”重复记。
             await RescanAsync(recordMissing: false);
             var report = RemovalText.Report(chosen, moved, DateTime.UtcNow);

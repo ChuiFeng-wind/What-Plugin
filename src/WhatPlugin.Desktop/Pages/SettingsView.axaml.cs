@@ -35,6 +35,15 @@ public interface IScanHost
     void CancelScan();
 
     void ShowStatus(string text);
+
+    /// <summary>重新打开欢迎窗口和导览。</summary>
+    void ShowOnboarding();
+
+    /// <summary>打开 Waves 完全卸载工具（只在 Windows 上有）。</summary>
+    Task OpenWavesToolAsync();
+
+    /// <summary>装了哪些扩展（成就包等）、哪些没加载成功。</summary>
+    string ExtensionSummary { get; }
 }
 
 /// <summary>设置页：主题、使用统计和插件扫描。扫描不会打开插件界面，也不会改动插件文件。</summary>
@@ -91,6 +100,9 @@ public partial class SettingsView : UserControl
         UsageEnabledBox.IsCheckedChanged += (_, _) => UsageEnabled_Changed();
         ClearUsageButton.Click += async (_, _) => await ClearUsage();
         InstallLookupButton.Click += (_, _) => InstallLookup();
+        ShowOnboardingButton.Click += (_, _) => _host.ShowOnboarding();
+        WavesToolCard.IsVisible = OperatingSystem.IsWindows();
+        WavesToolButton.Click += async (_, _) => await _host.OpenWavesToolAsync();
         RevealLookupButton.Click += (_, _) => { if (SystemShell.Reveal(LookupPlugin.Target) is { } problem) _host.ShowStatus(problem); };
     }
 
@@ -257,6 +269,8 @@ public partial class SettingsView : UserControl
         var count = _database.CountUsageEvents();
         UsageSummary.Text = (_database.UsageEnabled ? "正在记录。" : "已关闭，不再记录。") + (count > 0 ? $"已记下 {count} 条。" : "还没有记录。");
         ClearUsageButton.IsEnabled = count > 0;
+        ExtensionSummaryText.Text = _host.ExtensionSummary;
+        ExtensionSummaryText.IsVisible = ExtensionSummaryText.Text.Length > 0;
     }
 
     private void UsageEnabled_Changed()
@@ -303,5 +317,8 @@ public partial class SettingsView : UserControl
         public Task RunScanAsync(ScanRequest request) => Task.CompletedTask;
         public void CancelScan() { }
         public void ShowStatus(string text) { }
+        public void ShowOnboarding() { }
+        public Task OpenWavesToolAsync() => Task.CompletedTask;
+        public string ExtensionSummary => "";
     }
 }

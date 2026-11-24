@@ -21,4 +21,11 @@
     <Using Include="Xunit" />
     <ProjectReference Include="..\..\src\WhatPlugin.Desktop\WhatPlugin.Desktop.csproj" />
   </ItemGroup>
+  <!-- 成就包不在公开仓库里：有源码时先编译它（不引用，测试像主程序一样从扩展文件夹加载），没有时跳过这组测试。 -->
+  <ItemGroup Condition="Exists('..\..\src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj')">
+    <ProjectReference Include="..\..\src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup Condition="!Exists('..\..\src\WhatPlugin.Achievements\WhatPlugin.Achievements.csproj')">
+    <Compile Remove="AchievementsExtensionTests.cs" />
+  </ItemGroup>
 </Project>
