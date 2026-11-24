@@ -54,17 +54,10 @@ public partial class MainWindow
 
     private void BuildNoteTree(long? selectChain, long? selectFolder)
     {
-        var search = NoteTreeSearch.Text.Trim().ToLowerInvariant();
+        var search = NoteTreeSearch.Text;
         var words = search.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var plugins = _plugins.ToDictionary(p => p.Row.Key, p => p.Row.Name);
-        bool Matches(PluginChain chain)
-        {
-            if (words.Length == 0)
-                return true;
-            var text = string.Join(' ', [chain.Name, chain.Note, .. chain.TagList,
-                .. chain.Steps.SelectMany(s => s.AllPicks).Select(p => plugins.GetValueOrDefault(p.PluginKey) ?? p.PluginName)]).ToLowerInvariant();
-            return words.All(text.Contains);
-        }
+        bool Matches(PluginChain chain) => NoteListing.Matches(chain, search, plugins);
 
         NoteNode? selected = null;
         List<NoteNode> Children(long? parent)
@@ -163,16 +156,11 @@ public partial class MainWindow
     /// <summary>新建的笔记和文件夹放在哪里：选中的文件夹，或选中笔记所在的文件夹，都没有就放最外层。</summary>
     private long? TargetFolder => SelectedNode switch
     {
-        { IsFolder: true } node => node.Id,
-        { IsFolder: false } node => _chains.FirstOrDefault(c => c.Id == node.Id)?.FolderId,
+        { } node => NoteListing.TargetFolder(new NoteTreeEntry(node.IsFolder, node.Id, node.Name, "", "", node.Role, []), _chains),
         _ => null,
     };
 
-    private string FolderPathText(long? folderId)
-    {
-        var path = MixNotes.PathOf(folderId, _noteFolders);
-        return path.Count == 0 ? "最外层" : string.Join(" › ", path);
-    }
+    private string FolderPathText(long? folderId) => NoteListing.FolderPath(folderId, _noteFolders);
 
     // ---------- 中间：文件夹或笔记 ----------
 
@@ -190,9 +178,7 @@ public partial class MainWindow
         ChainDetail.Visibility = _shownChain != null ? Visibility.Visible : Visibility.Collapsed;
         FolderDetail.Visibility = _shownFolder != null ? Visibility.Visible : Visibility.Collapsed;
         ChainEmpty.Visibility = _shownChain == null && _shownFolder == null ? Visibility.Visible : Visibility.Collapsed;
-        ChainEmptyText.Text = _chains.Count == 0 && _noteFolders.Count == 0
-            ? "在左下角新建第一条笔记，比如“人声总线”；也可以先建文件夹，比如混音师的名字"
-            : NoteTreeSearch.Text.Trim().Length > 0 && _noteRoots.Count == 0 ? "没有符合搜索的笔记" : "在左边选一条笔记或一个文件夹";
+        ChainEmptyText.Text = NoteListing.EmptyText(_chains.Count == 0 && _noteFolders.Count == 0, NoteTreeSearch.Text.Trim().Length > 0, _noteRoots.Count == 0);
         if (_shownFolder != null)
             ShowFolderDetail(_shownFolder);
         if (_shownChain != null)
@@ -203,22 +189,15 @@ public partial class MainWindow
 
     private void ShowFolderDetail(NoteFolder folder)
     {
-        var ids = MixNotes.Subtree(folder.Id, _noteFolders);
-        var notes = _chains.Where(c => c.FolderId is { } f && ids.Contains(f)).ToList();
-        var subfolders = ids.Count - 1;
         FolderTitle.Text = folder.Name;
-        FolderMeta.Text = $"{FolderPathText(folder.Id)}  ·  {notes.Count} 条笔记" + (subfolders > 0 ? $"，{subfolders} 个子文件夹" : "");
-        FolderNotes.ItemsSource = notes
-            .OrderBy(c => FolderPathText(c.FolderId), StringComparer.CurrentCulture)
-            .ThenBy(c => c.Name, StringComparer.CurrentCulture)
-            .Select(c => new NoteSummary(c, c.FolderId == folder.Id ? "" : FolderPathText(c.FolderId)))
-            .ToList();
-        ShowFolderMap(folder, notes);
+        FolderMeta.Text = NoteListing.FolderMeta(folder, _chains, _noteFolders);
+        FolderNotes.ItemsSource = NoteListing.FolderNotes(folder, _chains, _noteFolders);
+        ShowFolderMap(folder, NoteListing.NotesIn(folder, _chains, _noteFolders));
     }
 
     private void FolderNotes_DoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (FolderNotes.SelectedItem is NoteSummary summary)
+        if (FolderNotes.SelectedItem is NoteSummaryRow summary)
             LoadChains(selectChain: summary.Chain.Id);
     }
 
@@ -257,17 +236,12 @@ public partial class MainWindow
         return new PickViewModel(pick, state, plugin, plugin == null ? null : _report.Usage.GetValueOrDefault(plugin.Key), ScheduleChainSave)
         {
             Wish = wishes.TryGetValue(Normalizer.Name(pick.PluginName), out var status) ? status : null,
-            Remembered = state != ChainStepState.Missing ? null
-                : plugin is { } row && TrashMemory.IsRemembered(row) ? row
-                : TrashMemory.Find(pick.PluginName, RememberedMatcher),
+            Remembered = NoteListing.Remembered(pick, state, plugin, RememberedMatcher),
         };
     }
 
     /// <summary>心愿单里每个名字的状态；同名的既有想买又有已购时按“想买”算。</summary>
-    private Dictionary<string, WishStatus> WishStatuses() => _database.LoadWishes()
-        .GroupBy(w => Normalizer.Name(w.Name))
-        .Where(g => g.Key.Length > 0)
-        .ToDictionary(g => g.Key, g => g.Min(w => w.Status));
+    private Dictionary<string, WishStatus> WishStatuses() => NoteWishes.Statuses(_database);
 
     private IEnumerable<PickViewModel> AllPicks => _chainSteps.SelectMany(s => s.Alternates.Prepend(s.Primary));
 
@@ -286,21 +260,13 @@ public partial class MainWindow
             return;
         FlushItems();
         var existing = WishStatuses();
-        var pending = picks.Where(p => p.CanWish).Select(p => p.Name).Where(n => !existing.ContainsKey(Normalizer.Name(n))).ToList();
+        var pending = NoteWishes.Pending(picks.Where(p => p.CanWish).Select(p => p.Name), existing);
         if (!ConfirmRememberedWishes(pending))
             return;
-        var added = new List<string>();
+        IReadOnlyList<string> added;
         try
         {
-            foreach (var pick in picks.Where(p => p.CanWish))
-            {
-                var key = Normalizer.Name(pick.Name);
-                if (key.Length == 0 || existing.ContainsKey(key))
-                    continue;
-                _database.AddWish(new WishItem(0, pick.Name, GuessVendor(pick.Name), Reason: $"混音笔记“{_shownChain.Name}”里用到"));
-                existing[key] = WishStatus.Wished;
-                added.Add(pick.Name);
-            }
+            added = NoteWishes.Add(_database, pending, _shownChain.Name, existing, _plugins.Select(p => p.Row).ToList());
         }
         catch (Microsoft.Data.Sqlite.SqliteException error)
         {
@@ -313,12 +279,7 @@ public partial class MainWindow
         foreach (var pick in AllPicks)
             pick.Wish = existing.TryGetValue(Normalizer.Name(pick.Name), out var status) ? status : null;
         UpdateChainMeta();
-        StatusText.Text = added.Count switch
-        {
-            0 => "这些插件已经在心愿单里了",
-            1 => $"已把 {added[0]} 加入心愿单",
-            _ => $"已把 {added.Count} 款未安装的插件加入心愿单：{string.Join("、", added)}",
-        };
+        StatusText.Text = NoteWishes.Added(added);
     }
 
     private PickViewModel MakePick(PluginViewModel plugin) =>
@@ -334,25 +295,14 @@ public partial class MainWindow
     {
         if (_shownChain == null)
             return;
-        var picks = _chainSteps.SelectMany(s => s.Alternates.Prepend(s.Primary)).ToList();
         var missing = _chainSteps.Count(s => s.Primary.State == ChainStepState.Missing);
         var hidden = _chainSteps.Count(s => s.Primary.State == ChainStepState.Blacklisted);
         var alternates = _chainSteps.Sum(s => s.Alternates.Count);
-        var parts = new List<string> { FolderPathText(_shownChain.FolderId) };
-        parts.Add(_chainSteps.Count == 0 ? "还没有插件" : $"{_chainSteps.Count} 步，按从上到下的顺序");
-        if (alternates > 0)
-            parts.Add($"{alternates} 个备选");
-        if (missing > 0)
-            parts.Add($"首选里 {missing} 款没安装");
-        if (hidden > 0)
-            parts.Add($"{hidden} 款在垃圾桶");
-        if (_shownChain.Source.Length > 0)
-            parts.Add("导入自 " + _shownChain.Source);
-        ChainMeta.Text = string.Join("  ·  ", parts);
+        ChainMeta.Text = NoteListing.ChainMeta(_shownChain, _noteFolders, _chainSteps.Count, alternates, missing, hidden);
         ChainItemsEmpty.Visibility = _chainSteps.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         var wishable = AllPicks.Where(p => p.CanWish).Select(p => Normalizer.Name(p.Name)).Distinct().Count();
         ChainWishMissingButton.Visibility = wishable > 0 ? Visibility.Visible : Visibility.Collapsed;
-        ChainWishMissingText.Text = wishable > 1 ? $"未安装的 {wishable} 款加入心愿单" : "未安装的加入心愿单";
+        ChainWishMissingText.Text = NoteListing.WishMissingText(wishable);
     }
 
     // ---------- 标签 ----------
@@ -364,8 +314,7 @@ public partial class MainWindow
         var active = _shownChain.TagList;
         var chipStyle = (Style)FindResource("TagChip");
         ChainTagChips.Children.Clear();
-        var all = MixNotes.PresetTags.Concat(active).Concat(_chains.SelectMany(c => c.TagList))
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var all = NoteListing.KnownTags(_chains, active);
         foreach (var tag in all)
         {
             var chip = new ToggleButton
@@ -463,7 +412,7 @@ public partial class MainWindow
     {
         if (!_projectUiReady)
             return;
-        ChainCandidateHint.Text = "点 + 加成新的一步；先在中间点选某一步，再点 ⇄ 可以加为它的备选";
+        ChainCandidateHint.Text = NoteListing.CandidateHint;
         var search = ChainSearchBox.Text.Trim().ToLowerInvariant();
         if (search.Length == 0)
         {
@@ -650,11 +599,7 @@ public partial class MainWindow
     private bool PickFolder(string title, long? current, IReadOnlySet<long> exclude, out long? target)
     {
         target = null;
-        var options = new List<(string Text, long? Id)> { ("最外层", null) };
-        options.AddRange(_noteFolders
-            .Where(f => !exclude.Contains(f.Id))
-            .Select(f => (FolderPathText(f.Id), (long?)f.Id))
-            .OrderBy(o => o.Item1, StringComparer.CurrentCulture));
+        var options = NoteListing.MoveTargets(_noteFolders, exclude).ToList();
         var index = Dialogs.PickOne(this, title, "移到哪个文件夹？也可以直接把左边的条目拖到文件夹上。",
             options.Select(o => o.Text).ToList(), "移动", Math.Max(0, options.FindIndex(o => o.Id == current)));
         if (index == null)
@@ -735,27 +680,13 @@ public partial class MainWindow
         var ids = MixNotes.Subtree(folder.Id, _noteFolders);
         var notes = _chains.Count(c => c.FolderId == folder.Id);
         var subfolders = _noteFolders.Count(f => f.ParentId == folder.Id);
-        // 连子文件夹里的也算，勾选“同时删除笔记”时删的是这些。
-        var allNotes = _chains.Count(c => c.FolderId is { } f && ids.Contains(f));
         var parent = FolderPathText(folder.ParentId);
         var withNotes = false;
-        bool confirmed;
-        if (allNotes == 0)
-        {
-            confirmed = Dialogs.Confirm(this, "删除文件夹", subfolders == 0
-                ? $"删除空文件夹“{folder.Name}”？"
-                : $"删除文件夹“{folder.Name}”？里面的 {subfolders} 个子文件夹会移到“{parent}”。", "删除文件夹", danger: true);
-        }
-        else
-        {
-            var option = ids.Count > 1
-                ? $"同时删除笔记：这个文件夹和子文件夹里的 {allNotes} 条笔记、{ids.Count - 1} 个子文件夹一起删除，不能恢复"
-                : $"同时删除笔记：里面的 {allNotes} 条笔记一起删除，不能恢复";
-            var inside = string.Join("和", new[] { notes > 0 ? $"{notes} 条笔记" : "", subfolders > 0 ? $"{subfolders} 个子文件夹" : "" }.Where(s => s.Length > 0));
-            confirmed = Dialogs.Confirm(this, "删除文件夹",
-                $"删除文件夹“{folder.Name}”？里面的 {inside}会移到“{parent}”，不会删除任何笔记。",
-                "删除文件夹", option, ref withNotes);
-        }
+        // 里面有笔记时多一个“同时删除笔记”的选项，连子文件夹里的也算。
+        var (message, option) = NoteListing.DeleteFolderPrompt(folder, _chains, _noteFolders);
+        var confirmed = option == null
+            ? Dialogs.Confirm(this, "删除文件夹", message, "删除文件夹", danger: true)
+            : Dialogs.Confirm(this, "删除文件夹", message, "删除文件夹", option, ref withNotes);
         if (!confirmed)
             return;
         if (withNotes)
@@ -874,9 +805,9 @@ public partial class MainWindow
     private void ChainItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (SelectedStep is { } step)
-            ChainCandidateHint.Text = $"点 + 加成新的一步；点 ⇄ 加为第 {step.Number} 步（{step.Name}）的备选";
+            ChainCandidateHint.Text = NoteListing.CandidateHintFor(step.Number, step.Name);
         else
-            ChainCandidateHint.Text = "点 + 加成新的一步；先在中间点选某一步，再点 ⇄ 可以加为它的备选";
+            ChainCandidateHint.Text = NoteListing.CandidateHint;
     }
 
     private void AddToChain_Click(object sender, RoutedEventArgs e)
@@ -1121,29 +1052,6 @@ public sealed class NoteNode : INotifyPropertyChanged
     public override string ToString() => Name;
 }
 
-/// <summary>文件夹详情里列出的一条笔记。</summary>
-public sealed class NoteSummary(PluginChain chain, string path)
-{
-    public PluginChain Chain { get; } = chain;
-    public string Name => Chain.Name;
-
-    public string Summary
-    {
-        get
-        {
-            var parts = new List<string>();
-            if (path.Length > 0)
-                parts.Add(path);
-            parts.Add(Chain.Steps.Count == 0 ? "还没有插件" : string.Join(" → ", Chain.Steps.Select(s => s.PluginName)));
-            if (Chain.TagList.Count > 0)
-                parts.Add(string.Join("、", Chain.TagList));
-            return string.Join("  ·  ", parts);
-        }
-    }
-
-    public override string ToString() => Name;
-}
-
 /// <summary>一款插件：某一步的首选或备选。改说明时通知保存，不重建列表，否则输入框会失去焦点。</summary>
 public sealed class PickViewModel(ChainPick pick, ChainStepState state, PluginRow? plugin, PluginUsage? usage, Action changed) : INotifyPropertyChanged
 {
@@ -1160,23 +1068,11 @@ public sealed class PickViewModel(ChainPick pick, ChainStepState state, PluginRo
     {
         get
         {
-            if (State == ChainStepState.Stock)
-                return (StockPlugins.ProductOf(pick.PluginName) ?? "宿主") + " 自带的插件，不需要另外安装";
-            if (plugin == null)
-                return "这款插件已不在扫描结果里";
-            var vendor = plugin.Vendor.Length > 0 ? plugin.Vendor : "未知";
-            return $"{vendor}  ·  {UsageLabels.Summary(usage)}";
+            return NoteListing.PickDetail(pick, State, plugin, usage);
         }
     }
 
-    public string StateText => State switch
-    {
-        ChainStepState.Missing => "未安装",
-        ChainStepState.Stock => "宿主自带",
-        ChainStepState.Blacklisted => "在垃圾桶",
-        ChainStepState.Instrument => "音源",
-        _ => "",
-    };
+    public string StateText => NoteListing.StateText(State);
 
     public Visibility StateVisibility => StateText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 

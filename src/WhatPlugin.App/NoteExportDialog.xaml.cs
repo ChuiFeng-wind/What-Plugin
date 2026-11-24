@@ -211,9 +211,9 @@ public partial class NoteExportDialog
             folder.SetFolderState(notes.Count == 0 ? false : selected == notes.Count ? true : selected == 0 ? false : null, selected, notes.Count);
         }
         var count = _rows.Count(r => r.IsNoteSelected);
-        SummaryText.Text = count > 0 ? $"已选 {count} 条笔记" : "还没有选择";
+        SummaryText.Text = ReviewListing.NoteSummary(count);
         ExportButton.IsEnabled = count > 0;
-        ExportButton.Content = count > 0 ? $"导出 {count} 条" : "导出";
+        ExportButton.Content = ReviewListing.NoteExportButton(count);
     }
 
     private void Export_Click(object sender, RoutedEventArgs e) => DialogResult = true;

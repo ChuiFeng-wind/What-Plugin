@@ -66,7 +66,13 @@
                     </StackPanel>
                     <ScrollViewer x:Name="DetailPanel" IsVisible="False" VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="20,18,18,20">
-                            <TextBlock x:Name="DetailTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <DockPanel>
+                                <Border x:Name="AdoptionBadge" DockPanel.Dock="Right" IsVisible="False" VerticalAlignment="Top" Margin="10,4,0,0" Padding="8,2"
+                                        CornerRadius="9" Background="{DynamicResource AccentSoft}" MaxWidth="200">
+                                    <TextBlock x:Name="AdoptionText" FontSize="12" Foreground="{DynamicResource Accent}" TextTrimming="CharacterEllipsis"/>
+                                </Border>
+                                <TextBlock x:Name="DetailTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            </DockPanel>
                             <TextBlock x:Name="DetailMeta" Classes="SmallNote" Margin="0,3,0,0"/>
 
                             <StackPanel x:Name="Stars" Orientation="Horizontal" Margin="-4,12,0,0"/>
@@ -76,6 +82,28 @@
                                         ToolTip.Tip="在左边选中这款插件所属的分类，和同类插件放在一起比较"/>
                                 <TextBlock x:Name="DetailUsage" Classes="SmallNote" VerticalAlignment="Center"/>
                             </DockPanel>
+
+                            <!-- 别人分享的评价：单独存放，可以采用或并排对比。 -->
+                            <Border x:Name="SharedReviewCard" IsVisible="False" Margin="0,14,0,0" Padding="14,10,14,12" CornerRadius="10"
+                                    BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource SurfaceHover}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <TextBlock x:Name="SharedAuthor" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="220" Margin="10,0,0,0" ToolTip.Tip="昵称由分享者自己填写，不能证明身份"/>
+                                        <TextBlock x:Name="SharedStars" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                    <ComboBox x:Name="SharedAuthorPicker" Margin="0,8,0,0" HorizontalAlignment="Stretch" AutomationProperties.Name="查看谁的评价"/>
+                                    <ScrollViewer x:Name="SharedNoteHost" MaxHeight="160" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                                        <SelectableTextBlock x:Name="SharedNote" TextWrapping="Wrap" LineHeight="21"/>
+                                    </ScrollViewer>
+                                    <TextBlock x:Name="SharedTags" Classes="SmallNote" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                    <TextBlock x:Name="SharedExtras" Classes="SmallNote" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,-6,-2">
+                                        <Button x:Name="CompareReviewsButton" Content="对比" Classes="Ghost" ToolTip.Tip="并排查看自己和别人的评价"/>
+                                        <Button x:Name="AdoptReviewButton" Content="采用" Classes="Ghost" ToolTip.Tip="复制到自己的评分、感受和标签，之后可以继续修改"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
 
                             <TextBlock Text="使用感受" Classes="FieldLabel"/>
                             <TextBox x:Name="NoteBox" Classes="Multiline" Height="104" AutomationProperties.Name="使用感受" PlaceholderText="听感、适合的场景、踩过的坑…"/>

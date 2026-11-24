@@ -166,9 +166,7 @@ public partial class MainWindow
             }
         }
         Walk(_noteRoots);
-        var inside = folders.SelectMany(f => MixNotes.Subtree(f.Id, _noteFolders)).ToHashSet();
-        var contained = _chains.Where(c => c.FolderId is { } f && inside.Contains(f)).ToList();
-        return new NoteBatch(notes, folders, contained, inside);
+        return NoteBatch.Of(folders, notes, _noteFolders, _chains);
     }
 
     /// <summary>有多选时，中间换成批量操作面板。</summary>
@@ -193,9 +191,7 @@ public partial class MainWindow
         FolderDetail.Visibility = Visibility.Collapsed;
         ChainEmpty.Visibility = Visibility.Collapsed;
         NoteBatchTitle.Text = "已选中 " + batch.Describe();
-        BatchMeta.Text = batch.Folders.Count > 0
-            ? $"选中的文件夹里一共有 {batch.Contained.Count} 条笔记。加标签、去标签对这些笔记也生效。"
-            : "点左边的勾选框，或按住 Ctrl 点击加选、取消，Shift 点击连选，Ctrl+A 全选，Esc 取消选择。选中的可以一起拖到文件夹上。";
+        BatchMeta.Text = batch.Hint;
         BatchList.ItemsSource = batch.Folders
             .Select(f => new BatchRow("", f.Name, FolderPathText(f.ParentId)))
             .Concat(batch.Notes.Select(c => new BatchRow("", c.Name, FolderPathText(c.FolderId))))
@@ -218,37 +214,11 @@ public partial class MainWindow
     {
         FlushChain();
         RememberExpansion();
-        var moved = 0;
-        var failed = new List<string>();
-        foreach (var folder in batch.Folders.Where(f => f.ParentId != target))
-        {
-            try
-            {
-                _database.MoveNoteFolder(folder.Id, target);
-                moved++;
-            }
-            catch (ArgumentException)
-            {
-                failed.Add(folder.Name);
-            }
-        }
-        foreach (var chain in batch.Notes.Where(c => c.FolderId != target))
-        {
-            try
-            {
-                _database.MoveChain(chain.Id, target);
-                moved++;
-            }
-            catch (ArgumentException)
-            {
-                failed.Add(chain.Name);
-            }
-        }
+        var done = NoteListing.MoveBatch(_database, batch, target, _noteFolders);
         if (target is { } id)
             _collapsedNoteFolders.Remove(id);
         LoadChains(selectFolder: target);
-        StatusText.Text = $"已把 {moved} 项移到“{FolderPathText(target)}”"
-            + (failed.Count > 0 ? $"；{failed.Count} 项没有移动，那里已经有同名的：{string.Join("、", failed.Take(5))}" + (failed.Count > 5 ? " 等" : "") : "");
+        StatusText.Text = done;
     }
 
     private void NoteBatchDelete_Click(object sender, RoutedEventArgs e) => DeleteBatch();
@@ -259,21 +229,10 @@ public partial class MainWindow
         if (batch.IsEmpty)
             return;
         var withNotes = false;
-        bool confirmed;
-        if (batch.Folders.Count == 0)
-        {
-            confirmed = Dialogs.Confirm(this, "删除笔记",
-                $"删除选中的 {batch.Notes.Count} 条笔记？里面的步骤、备选和思路会一起删除，不能恢复。插件不受影响。", "删除", danger: true);
-        }
-        else
-        {
-            var message = $"删除 {batch.Describe()}？"
-                + (batch.Notes.Count > 0 ? $"选中的 {batch.Notes.Count} 条笔记会被删除，不能恢复。" : "")
-                + (batch.Contained.Count > 0 ? $"文件夹里的 {batch.Contained.Count} 条笔记默认移到上一层，不会删除。" : "");
-            confirmed = batch.Contained.Count > 0
-                ? Dialogs.Confirm(this, "批量删除", message, "删除", $"同时删除文件夹里的 {batch.Contained.Count} 条笔记（不能恢复）", ref withNotes)
-                : Dialogs.Confirm(this, "批量删除", message, "删除", danger: true);
-        }
+        var (title, message, option) = batch.DeletePrompt();
+        var confirmed = option == null
+            ? Dialogs.Confirm(this, title, message, "删除", danger: true)
+            : Dialogs.Confirm(this, title, message, "删除", option, ref withNotes);
         if (!confirmed)
             return;
 
@@ -286,19 +245,12 @@ public partial class MainWindow
         else
             FlushChain();
         RememberExpansion();
-        var deleted = _database.DeleteChains(batch.Notes.Select(c => c.Id));
+        var done = NoteListing.DeleteBatch(_database, batch, withNotes);
         foreach (var folder in batch.Folders)
-        {
-            if (withNotes)
-                deleted += _database.DeleteNoteFolderWithNotes(folder.Id);
-            else
-                _database.DeleteNoteFolder(folder.Id);
             _collapsedNoteFolders.Remove(folder.Id);
-        }
         _shownFolder = null;
         LoadChains();
-        StatusText.Text = $"已删除 {deleted} 条笔记" + (batch.Folders.Count > 0 ? $"、{batch.Folders.Count} 个文件夹" : "")
-            + (batch.Folders.Count > 0 && !withNotes && batch.Contained.Count > 0 ? "，文件夹里的笔记移到了上一层" : "");
+        StatusText.Text = done;
     }
 
     private void BatchAddTags_Click(object sender, RoutedEventArgs e)
@@ -307,10 +259,7 @@ public partial class MainWindow
         var targets = batch.TagTargets;
         if (targets.Count == 0)
             return;
-        var known = MixNotes.PresetTags
-            .Concat(_chains.SelectMany(c => c.TagList))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var known = NoteListing.KnownTags(_chains);
         var picked = Dialogs.PickMany(this, "加标签", $"给 {targets.Count} 条笔记加上勾选的标签。已经有的不会重复。",
             known.Select(t => (t, false)).ToList(), "加上");
         if (picked == null)
@@ -340,8 +289,7 @@ public partial class MainWindow
         RememberExpansion();
         try
         {
-            foreach (var chain in targets)
-                _database.SetChainTags(chain.Id, change(chain.TagList).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+            NoteListing.ChangeTags(_database, targets, change);
         }
         catch (Microsoft.Data.Sqlite.SqliteException error)
         {
@@ -350,18 +298,6 @@ public partial class MainWindow
         LoadChains();
         StatusText.Text = done;
     }
-}
-
-/// <summary>多选的内容：直接选中的笔记和文件夹，以及文件夹（含子文件夹）里面的笔记。</summary>
-public sealed record NoteBatch(List<PluginChain> Notes, List<NoteFolder> Folders, List<PluginChain> Contained, HashSet<long> Inside)
-{
-    public bool IsEmpty => Notes.Count + Folders.Count == 0;
-
-    /// <summary>加标签、去标签的对象：选中的笔记，加上选中的文件夹里面的笔记。</summary>
-    public IReadOnlyList<PluginChain> TagTargets => Notes.Concat(Contained).DistinctBy(c => c.Id).ToList();
-
-    public string Describe() =>
-        string.Join("、", new[] { Notes.Count > 0 ? $"{Notes.Count} 条笔记" : "", Folders.Count > 0 ? $"{Folders.Count} 个文件夹" : "" }.Where(s => s.Length > 0));
 }
 
 public sealed record BatchRow(string Icon, string Name, string Path);

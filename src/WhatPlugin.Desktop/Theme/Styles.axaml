@@ -352,6 +352,23 @@
     </Style>
 
     <!-- 详情里的分类标签：选中时琥珀色 -->
+    <!-- 勾选框：选中时用主题的强调色，不用 Fluent 默认的蓝色 -->
+    <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Path#CheckGlyph">
+        <Setter Property="Fill" Value="{DynamicResource OnAccent}"/>
+    </Style>
+    <!-- 部分选中（例如导出笔记时文件夹里只勾了一部分）也用主题色。 -->
+    <Style Selector="CheckBox:indeterminate /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+    </Style>
+    <Style Selector="CheckBox:indeterminate /template/ Path#CheckGlyph">
+        <Setter Property="Fill" Value="{DynamicResource OnAccent}"/>
+    </Style>
+
     <Style Selector="ToggleButton.Chip">
         <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
         <Setter Property="Background" Value="Transparent"/>

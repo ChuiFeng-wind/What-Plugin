@@ -100,9 +100,9 @@ public partial class ReviewExportDialog
     private void UpdateSummary()
     {
         var count = _rows.Count(r => r.Selected);
-        SummaryText.Text = Author.Length == 0 ? "请填写昵称" : count > 0 ? $"已选 {count} 款" : "还没有选择";
+        SummaryText.Text = ReviewListing.ExportSummary(Author, count);
         ExportButton.IsEnabled = count > 0 && Author.Length > 0;
-        ExportButton.Content = count > 0 ? $"导出 {count} 款" : "导出";
+        ExportButton.Content = ReviewListing.ExportButton(count);
     }
 
     private void Export_Click(object sender, RoutedEventArgs e) => DialogResult = true;

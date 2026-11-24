@@ -3,13 +3,14 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using WhatPlugin.Core;
 
 namespace WhatPlugin.App;
 
 /// <summary>导入时输入备份密码，以及导出、导入勾选窗口共用的小零件。</summary>
 public static class BackupDialogs
 {
-    public const int MinPasswordLength = 6;
+    public const int MinPasswordLength = TransferListing.MinPasswordLength;
 
     /// <summary>
     /// 让用户输入备份密码。<paramref name="tryPassword"/> 返回 null 表示解开了，否则返回错误提示并留在对话框里。
@@ -53,8 +54,7 @@ public static class BackupDialogs
             window.DialogResult = true;
         };
 
-        var content = Body("输入备份密码",
-            "这份备份里的账号、密码和序列号是加密的，输入导出时设的备份密码才能恢复。跳过的话，其他内容照常导入，本机的账号密码保持不变。");
+        var content = Body("输入备份密码", TransferListing.AskPasswordMessage);
         content.Children.Add(Label("备份密码"));
         content.Children.Add(password);
         content.Children.Add(error);

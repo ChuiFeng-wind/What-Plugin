@@ -14,13 +14,13 @@ namespace WhatPlugin.App;
 /// <summary>心愿单和已购账号两页。</summary>
 public partial class MainWindow
 {
-    private const string SortByPriority = "按想要程度";
-    private const string SortByPrice = "按价格";
-    private const string SortByRecent = "最近添加";
-    private const string AllAccountVendors = "全部厂家";
-    private const string AllAccountStates = "全部";
-    private const string WithLogin = "已填账号";
-    private const string WithoutLogin = "未填账号";
+    private const string SortByPriority = WishListing.SortByPriority;
+    private const string SortByPrice = WishListing.SortByPrice;
+    private const string SortByRecent = WishListing.SortByRecent;
+    private const string AllAccountVendors = WishListing.AllVendors;
+    private const string AllAccountStates = WishListing.AllStates;
+    private const string WithLogin = WishListing.WithLogin;
+    private const string WithoutLogin = WishListing.WithoutLogin;
 
     private readonly DispatcherTimer _itemSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
 
@@ -35,21 +35,22 @@ public partial class MainWindow
     // 详情里账号框当前显示的是哪个平台的账号；厂家改了之后不能把旧平台的内容存到新平台。
     private string _shownLoginTarget = "";
     // 用户自己清空了厂家的记录，这次运行里不再自动填。
-    private readonly HashSet<long> _vendorCleared = [];
+    private readonly VendorFiller _vendorFiller = new();
 
     private void InitializeItems()
     {
         var currencies = Money.Currencies.ToList();
         WishCurrency.ItemsSource = currencies;
         PurchaseCurrency.ItemsSource = currencies;
-        var licenses = Enum.GetValues<LicenseKind>().Select(LicenseMigration.KindText).ToList();
-        PurchaseLicense.ItemsSource = licenses;
-        BatchLicense.ItemsSource = new[] { "不修改" }.Concat(licenses.Skip(1)).ToList();
+        PurchaseLicense.ItemsSource = WishListing.LicenseOptions;
+        BatchLicense.ItemsSource = WishListing.BatchLicenseOptions;
         BatchLicense.SelectedIndex = 0;
+        PurchaseLocked.Text = WishListing.PurchaseLockedText;
+        PlatformLocked.Text = WishListing.PlatformLockedText;
         _loadingItem = true;
-        WishSortBox.ItemsSource = new[] { SortByPriority, SortByPrice, SortByRecent };
+        WishSortBox.ItemsSource = WishListing.SortOptions;
         WishSortBox.SelectedIndex = 0;
-        AccountStateFilter.ItemsSource = new[] { AllAccountStates, WithLogin, WithoutLogin };
+        AccountStateFilter.ItemsSource = WishListing.StateOptions;
         AccountStateFilter.SelectedIndex = 0;
         _loadingItem = false;
         _itemSaveTimer.Tick += (_, _) => FlushItems();
@@ -61,9 +62,9 @@ public partial class MainWindow
         var wishId = _currentWish?.Item.Id;
         var purchaseId = _currentPurchase?.Item.Id;
 
-        var installed = _database.LoadPlugins().Where(p => !p.IsMissing).Select(p => Normalizer.Name(p.Name)).ToHashSet();
+        var installed = WishListing.InstalledNames(_database.LoadPlugins());
         _platformAccounts = PurchaseLogin.ByKey(_database.LoadPlatformAccounts());
-        var all = _database.LoadWishes().Select(w => new WishViewModel(w, IsInstalled(w, installed), PurchaseLogin.Resolve(w, _platformAccounts))).ToList();
+        var all = _database.LoadWishes().Select(w => new WishViewModel(w, WishListing.IsInstalled(w, installed), PurchaseLogin.Resolve(w, _platformAccounts))).ToList();
         _wishes = all.Where(w => w.Item.Status == WishStatus.Wished).ToList();
         RecordUsage(() => _database.RecordWishCount(_wishes.Count));
         _purchases = all.Where(w => w.Item.Status == WishStatus.Purchased).ToList();
@@ -91,48 +92,33 @@ public partial class MainWindow
         UpdateItemSummaries();
     }
 
-    /// <summary>插件名可能带厂家（FabFilter Pro-Q 3），也可能不带，两种都算已安装。</summary>
-    private static bool IsInstalled(WishItem item, HashSet<string> installed)
-    {
-        var name = Normalizer.Name(item.Name);
-        return installed.Contains(name) || (item.Vendor.Length > 0 && installed.Contains(Normalizer.Vendor(item.Vendor) + name));
-    }
-
     private void UpdateItemSummaries()
     {
         CountWishes.Text = _wishes.Count > 0 ? _wishes.Count.ToString() : "";
         CountAccounts.Text = _purchases.Count > 0 ? _purchases.Count.ToString() : "";
 
-        var total = Money.Total(_wishes.Select(w => (w.Item.Price, w.Item.Currency)));
-        WishSubtitle.Text = _wishes.Count == 0
-            ? "记下想买的插件、原因和价格，买了之后转到已购账号"
-            : $"{_wishes.Count} 款" + (total.Length > 0 ? $"，全买下来约 {total}" : "");
-
-        var withLogin = _purchases.Count(p => p.HasLogin);
-        var paid = Money.Total(_purchases.Select(p => (p.Item.PaidPrice, p.Item.Currency)));
-        AccountSubtitle.Text = (_purchases.Count == 0 ? "" : $"{_purchases.Count} 款，{withLogin} 款已填账号，")
-            + (paid.Length > 0 ? $"已花 {paid}，" : "")
-            + "密码和序列号加密保存在本机";
+        WishSubtitle.Text = WishListing.WishSubtitle(_wishes.Select(w => w.Row).ToList());
+        AccountSubtitle.Text = WishListing.AccountSubtitle(_purchases.Select(p => p.Row).ToList());
 
         var wishShown = _wishView?.Cast<object>().Any() ?? false;
         WishEmpty.Visibility = wishShown ? Visibility.Collapsed : Visibility.Visible;
-        WishEmptyText.Text = _wishes.Count == 0 ? "还没有想买的插件，在上面输入名字加入" : "没有符合搜索的心愿";
+        WishEmptyText.Text = WishListing.WishEmptyText(_wishes.Count);
 
         var purchaseShown = _purchaseView?.Cast<object>().Any() ?? false;
         PurchaseEmpty.Visibility = purchaseShown ? Visibility.Collapsed : Visibility.Visible;
-        PurchaseEmptyText.Text = _purchases.Count == 0 ? "还没有已购记录，点右上角“批量添加”" : "没有符合筛选的记录";
+        PurchaseEmptyText.Text = WishListing.PurchaseEmptyText(_purchases.Count);
     }
 
     private void ShowItemStatus()
     {
         if (_page == AppPage.Wishes)
         {
-            StatusText.Text = _wishes.Count == 0 ? "" : $"心愿单 {_wishes.Count} 款";
+            StatusText.Text = WishListing.WishesStatus(_wishes.Count);
             // 工程或插件可能在别的页面变过。
             ShowWishAdvice();
         }
         else if (_page == AppPage.Accounts)
-            StatusText.Text = _purchases.Count == 0 ? "" : $"已购 {_purchases.Count} 款";
+            StatusText.Text = WishListing.PurchasesStatus(_purchases.Count);
     }
 
     private void FlushItems()
@@ -169,11 +155,7 @@ public partial class MainWindow
 
     // ---------- 心愿单 ----------
 
-    private bool MatchesWish(object item)
-    {
-        var search = WishSearchBox.Text.Trim().ToLowerInvariant();
-        return search.Length == 0 || search.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(((WishViewModel)item).SearchText.Contains);
-    }
+    private bool MatchesWish(object item) => WishListing.Matches(((WishViewModel)item).SearchText, WishSearchBox.Text);
 
     private void ApplyWishSort()
     {
@@ -220,7 +202,7 @@ public partial class MainWindow
         var name = QuickAddBox.Text.Trim();
         if (name.Length == 0)
         {
-            StatusText.Text = "请先输入插件名";
+            StatusText.Text = WishListing.NameRequired;
             QuickAddBox.Focus();
             return;
         }
@@ -245,45 +227,25 @@ public partial class MainWindow
         WishList.SelectedItem = _wishes.FirstOrDefault(w => w.Item.Id == added.Id);
         if (WishList.SelectedItem != null)
             WishList.ScrollIntoView(WishList.SelectedItem);
-        StatusText.Text = $"已加入心愿单：{name}" + (added.Vendor.Length > 0 ? $"，厂家自动识别为 {added.Vendor}（不对可以直接改）" : "") + "，可以在右边补上原因和价格";
-    }
-
-    /// <summary>以前卸载过的插件：垃圾桶里的已卸载记录，或卸载历史（插件记录删了也能找到）。没卸载过返回 null。</summary>
-    private (string Name, string Text)? FindRemembered(string name, IReadOnlyList<PluginRow> rows, IReadOnlyList<UninstallRecord> history)
-    {
-        var row = TrashMemory.Find(name, rows);
-        var record = row != null ? UninstallHistory.ForPlugin(row, history) : UninstallHistory.Find(name, history, rows);
-        if (row == null && record == null)
-            return null;
-        return (row?.Name ?? record!.Name, UninstallHistory.Reminder(row, record));
+        StatusText.Text = WishListing.QuickAdded(name, added.Vendor);
     }
 
     /// <summary>
     /// 要加入心愿单的插件里，有以前移进垃圾桶又卸载了的：先把当时写的原因和评价摆出来，确认还要加。
     /// 没有这种插件时直接返回 true。
     /// </summary>
-    private bool ConfirmRememberedWishes(IReadOnlyList<string> names)
-    {
-        var rows = _plugins.Select(p => p.Row).ToList();
-        var history = _database.LoadUninstallHistory();
-        var found = names.Select(n => FindRemembered(n, rows, history)).OfType<(string Name, string Text)>().DistinctBy(f => f.Name).ToList();
-        if (found.Count == 0)
-            return true;
-        var head = found.Count == 1
-            ? $"你以前把 {found[0].Name} 移进垃圾桶，后来卸载了。"
-            : $"下面 {found.Count} 款插件你以前都移进垃圾桶，后来卸载了。";
-        var lines = string.Join("\n", found.Select(f => $"· {f.Name}：{f.Text}"));
-        return Dialogs.Confirm(this, "以前不要过的插件", $"{head}\n\n{lines}\n\n还要加入心愿单吗？", "仍然加入");
-    }
+    private bool ConfirmRememberedWishes(IReadOnlyList<string> names) =>
+        NoteWishes.RememberedPrompt(names, _plugins.Select(p => p.Row).ToList(), _database.LoadUninstallHistory()) is not { } prompt
+        || Dialogs.Confirm(this, "以前不要过的插件", prompt, "仍然加入");
 
     /// <summary>心愿单详情顶上的提醒：这款以前移进垃圾桶并卸载过。</summary>
     private void ShowWishTrashNote(WishItem item)
     {
         var remembered = item.Status == WishStatus.Wished
-            ? FindRemembered(item.Name, _plugins.Select(p => p.Row).ToList(), _database.LoadUninstallHistory())
+            ? NoteWishes.FindRemembered(item.Name, _plugins.Select(p => p.Row).ToList(), _database.LoadUninstallHistory())
             : null;
         WishTrashNote.Visibility = remembered != null ? Visibility.Visible : Visibility.Collapsed;
-        WishTrashText.Text = remembered is { } r ? $"你以前把 {r.Name} 移进垃圾桶，后来卸载了。{r.Text}" : "";
+        WishTrashText.Text = remembered is { } r ? WishListing.TrashNote(r) : "";
     }
 
     private void WishList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -310,12 +272,7 @@ public partial class MainWindow
         WishPrice.Text = item.Price?.ToString("0.##") ?? "";
         WishTarget.Text = item.TargetPrice?.ToString("0.##") ?? "";
         WishLowest.Text = item.LowestPrice?.ToString("0.##") ?? "";
-        var categories = new[] { PurchaseAdvisor.AutoCategory }
-            .Concat(PluginComparison.Categories(_plugins.Select(p => p.Row)).Select(c => c.Tag).Where(t => t != PluginComparison.Uncategorized))
-            .ToList();
-        if (item.Category.Length > 0 && !categories.Contains(item.Category))
-            categories.Add(item.Category);
-        WishCategory.ItemsSource = categories;
+        WishCategory.ItemsSource = WishListing.Categories(item, _plugins.Select(p => p.Row));
         WishCategory.SelectedItem = item.Category.Length > 0 ? item.Category : PurchaseAdvisor.AutoCategory;
         WishPriorityMustHave.IsChecked = WishPriority.Clean(item.Priority) == WishPriority.MustHave;
         WishPriorityCanWait.IsChecked = WishPriority.Clean(item.Priority) == WishPriority.CanWait;
@@ -351,84 +308,29 @@ public partial class MainWindow
         var old = _currentWish.Item;
 
         // 填错的项保留原值并提示，其余内容照常保存。
-        var problems = new List<string>();
-        var name = WishName.Text.Trim();
-        if (name.Length == 0)
-        {
-            name = old.Name;
-            problems.Add("插件名不能为空");
-        }
-        if (!Money.TryParse(WishPrice.Text, out var price))
-        {
-            price = old.Price;
-            problems.Add("价格只能填数字");
-        }
-        if (!Money.TryParse(WishTarget.Text, out var target))
-        {
-            target = old.TargetPrice;
-            problems.Add("目标价只能填数字");
-        }
-        if (!Money.TryParse(WishLowest.Text, out var lowest))
-        {
-            lowest = old.LowestPrice;
-            problems.Add("历史最低价只能填数字");
-        }
-        var category = WishCategory.SelectedItem as string ?? PurchaseAdvisor.AutoCategory;
+        var (parsed, problems) = WishListing.ParseWish(old, new WishFields(
+            WishName.Text, WishPrice.Text, WishTarget.Text, WishLowest.Text,
+            WishCurrency.SelectedItem as string, WishCategory.SelectedItem as string,
+            WishPriorityMustHave.IsChecked == true, WishReason.Text, WishUrl.Text, WishNote.Text));
 
-        var vendor = FillVendor(old, name, WishVendor.Text.Trim(), out var guessed);
+        var vendor = FillVendor(old, parsed.Name, WishVendor.Text, out var guessed);
         if (guessed)
         {
             _loadingItem = true;
             WishVendor.Text = vendor;
             _loadingItem = false;
         }
-        var updated = old with
-        {
-            Name = name,
-            Vendor = vendor,
-            Currency = WishCurrency.SelectedItem as string ?? old.Currency,
-            Price = price,
-            TargetPrice = target,
-            LowestPrice = lowest,
-            Category = category == PurchaseAdvisor.AutoCategory ? "" : category,
-            Priority = WishPriorityMustHave.IsChecked == true ? WishPriority.MustHave : WishPriority.CanWait,
-            Reason = WishReason.Text,
-            Url = WishUrl.Text.Trim(),
-            Note = WishNote.Text,
-        };
+        var updated = parsed with { Vendor = vendor };
         if (!TrySave(updated))
             return;
         _currentWish.Update(updated);
         UpdateItemSummaries();
         ShowWishAdvice();
-        StatusText.Text = problems.Count > 0 ? string.Join("，", problems) + "，这一项没有保存"
-            : guessed ? $"已保存 {updated.Name}，厂家自动识别为 {vendor}（不对可以直接改）"
-            : $"已保存 {updated.Name}";
+        StatusText.Text = WishListing.Saved(updated.Name, problems, guessed ? vendor : "");
     }
 
-    /// <summary>
-    /// 厂家留空时按插件名猜：先找已安装的同名插件，再查厂家目录。同名属于多个厂家时不填。
-    /// 用户亲手清空的厂家不再自动填回去。
-    /// </summary>
-    private string FillVendor(WishItem old, string name, string vendor, out bool guessed)
-    {
-        guessed = false;
-        if (vendor.Length > 0)
-        {
-            _vendorCleared.Remove(old.Id);
-            return vendor;
-        }
-        if (old.Vendor.Length > 0 && name == old.Name)
-        {
-            _vendorCleared.Add(old.Id);
-            return "";
-        }
-        if (_vendorCleared.Contains(old.Id))
-            return "";
-        var guess = GuessVendor(name);
-        guessed = guess.Length > 0;
-        return guess;
-    }
+    private string FillVendor(WishItem old, string name, string vendor, out bool guessed) =>
+        _vendorFiller.Fill(old, name, vendor, _plugins.Select(p => p.Row), out guessed);
 
     // ---------- 厂家候选 ----------
 
@@ -502,25 +404,9 @@ public partial class MainWindow
         WishVendor.Focus();
     }
 
-    private string GuessVendor(string name)
-    {
-        var key = Normalizer.Name(name);
-        var installed = _plugins.Select(p => p.Row).Where(p => p.Vendor.Length > 0 && Normalizer.Name(p.Name) == key)
-            .Select(p => p.Vendor).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (installed.Count == 1)
-            return installed[0];
-        if (installed.Count > 1)
-            return "";
-        return VendorCatalog.Guess(name) is { IsAmbiguous: false } guess ? guess.Vendor : "";
-    }
+    private string GuessVendor(string name) => NoteWishes.GuessVendor(name, _plugins.Select(p => p.Row));
 
-    private void WishOpenUrl_Click(object sender, RoutedEventArgs e)
-    {
-        var url = WishUrl.Text.Trim();
-        if (!url.Contains("://", StringComparison.Ordinal) && url.Length > 0)
-            url = "https://" + url;
-        OpenWebPage(url);
-    }
+    private void WishOpenUrl_Click(object sender, RoutedEventArgs e) => OpenWebPage(WishListing.WishUrl(WishUrl.Text));
 
     /// <summary>查价只是打开一次网页搜索，软件自己不联网抓价格。</summary>
     private void WishPriceSearch_Click(object sender, RoutedEventArgs e) =>
@@ -551,18 +437,12 @@ public partial class MainWindow
         ScheduleItemSave();
         FlushItems();
         var item = _currentWish.Item;
-        var bought = item with
-        {
-            Status = WishStatus.Purchased,
-            PurchasedOn = DateOnly.FromDateTime(DateTime.Today),
-            PaidPrice = item.Price,
-        };
-        if (!TrySave(bought))
+        if (!TrySave(WishListing.Bought(item, DateOnly.FromDateTime(DateTime.Today))))
             return;
 
         WishList.SelectedItem = null;
         LoadItems();
-        StatusText.Text = $"已把 {item.Name} 移到已购账号，可以去那里填账号密码";
+        StatusText.Text = WishListing.BoughtText(item);
     }
 
     private void WishDelete_Click(object sender, RoutedEventArgs e)
@@ -571,7 +451,7 @@ public partial class MainWindow
             return;
         FlushItems();
         var item = _currentWish.Item;
-        if (!Dialogs.Confirm(this, "删除这款心愿？", $"“{item.Name}”的原因、价格和备注都会删除，无法恢复。", "删除", danger: true))
+        if (!Dialogs.Confirm(this, "删除这款心愿？", WishListing.WishDeletePrompt(item), "删除", danger: true))
             return;
         DeleteItems([item], () => WishList.SelectedItem = null);
         StatusText.Text = $"已删除 {item.Name}";
@@ -600,17 +480,8 @@ public partial class MainWindow
 
     private bool MatchesPurchase(object item)
     {
-        var purchase = (WishViewModel)item;
-        if (AccountVendorFilter.SelectedItem is string vendor && vendor != AllAccountVendors && purchase.Item.Vendor != vendor)
-            return false;
-        switch (AccountStateFilter.SelectedItem as string)
-        {
-            case WithLogin when !purchase.HasLogin:
-            case WithoutLogin when purchase.HasLogin:
-                return false;
-        }
-        var search = AccountSearchBox.Text.Trim().ToLowerInvariant();
-        return search.Length == 0 || search.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(purchase.SearchText.Contains);
+        return WishListing.MatchesPurchase(((WishViewModel)item).Row, AccountVendorFilter.SelectedItem as string ?? "",
+            AccountStateFilter.SelectedItem as string ?? "", AccountSearchBox.Text);
     }
 
     private void AccountFilter_Changed(object sender, EventArgs e)
@@ -676,20 +547,8 @@ public partial class MainWindow
         LoginHint.Text = DescribeLogin(item, login);
     }
 
-    private string DescribeLogin(WishItem item, EffectiveLogin login)
-    {
-        if (login.Platform.Length == 0)
-            return "厂家没填，账号只存在这一款上。填上厂家后就能和同厂家的插件共用账号。";
-        var sharing = _purchases.Count(p => !p.Item.OwnLogin && VendorCatalog.PlatformKey(VendorCatalog.PlatformOf(p.Item.Vendor)) == VendorCatalog.PlatformKey(login.Platform));
-        if (login.FromPlatform)
-        {
-            var same = login.Platform == VendorCatalog.DisplayVendor(item.Vendor) ? "" : $"{VendorCatalog.DisplayVendor(item.Vendor)} 的插件用 {login.Platform} 账号登录。";
-            return same + (login.HasAny
-                ? $"这是 {login.Platform} 的厂家账号，{sharing} 款插件共用，在这里修改会一起生效。"
-                : $"{login.Platform} 还没有厂家账号，在这里填写后，{sharing} 款同厂家的插件都会使用它。");
-        }
-        return $"只用于这一款，不影响 {login.Platform} 的厂家账号。";
-    }
+    private string DescribeLogin(WishItem item, EffectiveLogin login) =>
+        WishListing.DescribeLogin(item, login, _purchases.Select(p => p.Item));
 
     private void LoginMode_Checked(object sender, RoutedEventArgs e)
     {
@@ -707,10 +566,8 @@ public partial class MainWindow
         if (!own && platform.Length > 0)
         {
             _platformAccounts.TryGetValue(VendorCatalog.PlatformKey(platform), out var shared);
-            var platformEmpty = shared == null || (shared.Account.Length == 0 && shared.Password.Length == 0 && !shared.Locked);
-            var hasOwn = item.Account.Length > 0 || item.Password.Length > 0;
-            if (platformEmpty && hasOwn && !item.SecretsLocked
-                && Dialogs.Confirm(this, "设为厂家账号？", $"把这一款的账号密码设为 {platform} 的厂家账号吗？同厂家其余跟随厂家账号的插件也会使用它。", "设为厂家账号"))
+            if (WishListing.OfferAsPlatform(item, shared)
+                && Dialogs.Confirm(this, "设为厂家账号？", WishListing.OfferAsPlatformPrompt(platform), "设为厂家账号"))
             {
                 try
                 {
@@ -728,7 +585,7 @@ public partial class MainWindow
         if (!TrySave(item with { OwnLogin = own }))
             return;
         LoadItems();
-        StatusText.Text = own ? $"{item.Name} 改为单独账号" : $"{item.Name} 改为使用 {platform} 的厂家账号";
+        StatusText.Text = WishListing.LoginModeChanged(item, own);
     }
 
     private void PurchaseField_Changed(object sender, RoutedEventArgs e)
@@ -749,34 +606,12 @@ public partial class MainWindow
             return;
         var old = _currentPurchase.Item;
 
-        var problems = new List<string>();
-        var name = PurchaseName.Text.Trim();
-        if (name.Length == 0)
-        {
-            name = old.Name;
-            problems.Add("插件名不能为空");
-        }
-        if (!Money.TryParse(PurchasePaid.Text, out var paid))
-        {
-            paid = old.PaidPrice;
-            problems.Add("实付只能填数字");
-        }
-        var date = old.PurchasedOn;
-        if (string.IsNullOrWhiteSpace(PurchaseDate.Text))
-            date = null;
-        else if (DateOnly.TryParse(PurchaseDate.Text.Trim(), out var parsed))
-            date = parsed;
-        else
-            problems.Add("日期格式应为 2026-11-06");
-        var activations = old.ActivationsLeft;
-        if (string.IsNullOrWhiteSpace(PurchaseActivations.Text))
-            activations = null;
-        else if (int.TryParse(PurchaseActivations.Text.Trim(), out var left) && left >= 0)
-            activations = left;
-        else
-            problems.Add("剩余激活次数只能填整数");
+        var (parsed, problems) = WishListing.ParsePurchase(old, new PurchaseFields(
+            PurchaseName.Text, PurchaseSerial.Secret, PurchaseCurrency.SelectedItem as string, PurchasePaid.Text, PurchaseDate.Text,
+            PurchaseLicense.SelectedIndex, PurchaseActivatedOn.Text, PurchaseActivations.Text, PurchaseInvoice.Text,
+            PurchaseReason.Text, PurchaseNote.Text));
 
-        var vendor = FillVendor(old, name, PurchaseVendor.Text.Trim(), out var guessed);
+        var vendor = FillVendor(old, parsed.Name, PurchaseVendor.Text, out var guessed);
         if (guessed)
         {
             _loadingItem = true;
@@ -793,12 +628,10 @@ public partial class MainWindow
         if (shownPlatform.Length > 0)
         {
             _platformAccounts.TryGetValue(VendorCatalog.PlatformKey(shownPlatform), out var shared);
-            var locked = shared?.Locked ?? false;
-            if ((shared?.Account ?? "") != account || (!locked && (shared?.Password ?? "") != password))
+            if (WishListing.ChangedPlatform(shownPlatform, shared, account, password) is { } saved)
             {
                 try
                 {
-                    var saved = new PlatformAccount(shownPlatform, account, locked ? "" : password, shared?.Note ?? "", locked);
                     _database.SavePlatformAccount(saved);
                     _platformAccounts[VendorCatalog.PlatformKey(shownPlatform)] = saved;
                 }
@@ -815,23 +648,7 @@ public partial class MainWindow
             ownPassword = old.SecretsLocked ? old.Password : password;
         }
 
-        var updated = old with
-        {
-            Name = name,
-            Vendor = vendor,
-            Account = ownAccount,
-            Password = ownPassword,
-            Serial = old.SecretsLocked ? old.Serial : PurchaseSerial.Secret,
-            Currency = PurchaseCurrency.SelectedItem as string ?? old.Currency,
-            PaidPrice = paid,
-            PurchasedOn = date,
-            LicenseKind = (LicenseKind)Math.Max(PurchaseLicense.SelectedIndex, 0),
-            ActivatedOn = PurchaseActivatedOn.Text.Trim(),
-            Invoice = PurchaseInvoice.Text.Trim(),
-            ActivationsLeft = activations,
-            Reason = PurchaseReason.Text,
-            Note = PurchaseNote.Text,
-        };
+        var updated = parsed with { Vendor = vendor, Account = ownAccount, Password = ownPassword };
         if (!TrySave(updated))
             return;
         var login = PurchaseLogin.Resolve(updated, _platformAccounts);
@@ -845,27 +662,24 @@ public partial class MainWindow
         else
             LoginHint.Text = DescribeLogin(updated, login);
         UpdateItemSummaries();
-        StatusText.Text = problems.Count > 0 ? string.Join("，", problems) + "，这一项没有保存"
-            : guessed ? $"已保存 {updated.Name}，厂家自动识别为 {vendor}（不对可以直接改）"
-            : shownPlatform.Length > 0 ? $"已保存 {updated.Name}，账号密码存在 {shownPlatform} 的厂家账号里"
-            : $"已保存 {updated.Name}";
+        StatusText.Text = WishListing.Saved(updated.Name, problems, guessed ? vendor : "", shownPlatform);
     }
 
     /// <summary>把这台电脑加到“激活在”，已有其他机器时保留。</summary>
     private void PurchaseThisMachine_Click(object sender, RoutedEventArgs e)
     {
-        var machine = Environment.MachineName;
-        var current = PurchaseActivatedOn.Text.Trim();
-        if (_currentPurchase != null && LicenseMigration.IsActivatedOn(_currentPurchase.Item with { ActivatedOn = current }, machine))
+        if (_currentPurchase == null)
             return;
-        PurchaseActivatedOn.Text = current.Length > 0 ? $"{current}，{machine}" : machine;
+        var text = WishListing.AddMachine(_currentPurchase.Item, PurchaseActivatedOn.Text, Environment.MachineName);
+        if (text != PurchaseActivatedOn.Text.Trim())
+            PurchaseActivatedOn.Text = text;
     }
 
     private void MigrationChecklist_Click(object sender, RoutedEventArgs e)
     {
         FlushItems();
         var text = LicenseMigration.BuildChecklist(_database.LoadWishes(), Environment.MachineName, DateTime.Now);
-        Dialogs.ShowText(this, "换机清单", text, $"WhatPlugin-换机清单-{DateTime.Now:yyyyMMdd}.txt",
+        Dialogs.ShowText(this, "换机清单", text, WishListing.ChecklistFileName(DateTime.Now),
             saved: () => RecordUsage(() => _database.RecordUsage(UsageKinds.ChecklistExport)));
     }
 
@@ -892,7 +706,7 @@ public partial class MainWindow
             return;
         PurchaseGrid.SelectedItem = null;
         LoadItems();
-        StatusText.Text = $"已把 {item.Name} 移回心愿单" + (item.HasLogin ? "，账号密码仍然保留" : "");
+        StatusText.Text = WishListing.BackText(item);
     }
 
     private void PurchaseDelete_Click(object sender, RoutedEventArgs e)
@@ -901,10 +715,7 @@ public partial class MainWindow
             return;
         FlushItems();
         var item = _currentPurchase.Item;
-        var message = item.HasLogin
-            ? $"“{item.Name}”保存的账号、密码和序列号都会删除，无法恢复。"
-            : $"“{item.Name}”的记录会删除，无法恢复。";
-        if (!Dialogs.Confirm(this, "删除这条记录？", message, "删除", danger: true))
+        if (!Dialogs.Confirm(this, "删除这条记录？", WishListing.PurchaseDeletePrompt(item), "删除", danger: true))
             return;
         DeleteItems([item], PurchaseGrid.UnselectAll);
         StatusText.Text = $"已删除 {item.Name}";
@@ -928,33 +739,14 @@ public partial class MainWindow
             return;
         }
 
-        // 厂家账号不会被覆盖（不一样时存成单独账号），这里只数单独账号和序列号。
-        var overwritten = selected.Count(i =>
-            (i.OwnLogin && account.Length > 0 && i.Account.Length > 0 && i.Account != account)
-            || (i.OwnLogin && password.Length > 0 && (i.Password.Length > 0 || i.SecretsLocked) && i.Password != password)
-            || (serial.Length > 0 && (i.Serial.Length > 0 || i.SecretsLocked) && i.Serial != serial));
-        if (overwritten > 0 && !Dialogs.Confirm(this, "覆盖已有内容？",
-                $"选中的 {selected.Count} 款里，有 {overwritten} 款已经填了不一样的内容，保存后旧内容无法找回。", "覆盖", danger: true))
+        var overwritten = WishListing.Overwritten(selected, account, password, serial);
+        if (overwritten > 0 && !Dialogs.Confirm(this, "覆盖已有内容？", WishListing.OverwritePrompt(selected.Count, overwritten), "覆盖", danger: true))
             return;
 
-        LoginAssignment? assigned = null;
+        LoginAssignment? assigned;
         try
         {
-            if (hasLogin)
-                assigned = _database.SetLogins(selected.Select(i => i.Id), account, password, serial);
-            if (license != null || activatedOn.Length > 0)
-            {
-                // SetLogins 刚改过账号，这里要读最新的，否则会写回旧内容。
-                var ids = selected.Select(i => i.Id).ToHashSet();
-                foreach (var item in _database.LoadWishes().Where(w => ids.Contains(w.Id)))
-                {
-                    _database.SaveWish(item with
-                    {
-                        LicenseKind = license ?? item.LicenseKind,
-                        ActivatedOn = activatedOn.Length > 0 ? activatedOn : item.ActivatedOn,
-                    });
-                }
-            }
+            assigned = WishListing.ApplyBatch(_database, selected.Select(i => i.Id).ToList(), account, password, serial, license, activatedOn);
         }
         catch (Microsoft.Data.Sqlite.SqliteException error)
         {
@@ -969,15 +761,13 @@ public partial class MainWindow
         BatchActivatedOn.Text = "";
         PurchaseGrid.UnselectAll();
         LoadItems();
-        StatusText.Text = $"已保存到 {selected.Count} 款插件" + DescribeAssignment(assigned?.NewPlatforms, assigned?.Own ?? 0);
+        StatusText.Text = WishListing.BatchSaved(selected.Count, assigned);
     }
 
     private void BatchDelete_Click(object sender, RoutedEventArgs e)
     {
         var selected = SelectedPurchases();
-        var withLogin = selected.Count(i => i.HasLogin);
-        var message = $"会删除这 {selected.Count} 条记录" + (withLogin > 0 ? $"，其中 {withLogin} 条保存的账号密码也一起删除" : "") + "，无法恢复。";
-        if (!Dialogs.Confirm(this, "删除选中的记录？", message, "删除", danger: true))
+        if (!Dialogs.Confirm(this, "删除选中的记录？", WishListing.BatchDeletePrompt(selected), "删除", danger: true))
             return;
         DeleteItems(selected, PurchaseGrid.UnselectAll);
         StatusText.Text = $"已删除 {selected.Count} 条记录";
@@ -986,16 +776,8 @@ public partial class MainWindow
     // ---------- 用过的账号 ----------
 
     /// <summary>填过的账号（已购记录和厂家账号里的），用得多的排前面。只有账号，没有密码。</summary>
-    private List<string> KnownAccounts() => _purchases.Concat(_wishes).Select(w => w.Item.Account)
-        .Concat(_platformAccounts.Values.Select(p => p.Account))
-        .Concat([PurchaseAccount.Text, PlatformAccountBox.Text])
-        .Select(a => a.Trim())
-        .Where(a => a.Length > 0)
-        .GroupBy(a => a, StringComparer.OrdinalIgnoreCase)
-        .OrderByDescending(g => g.Count())
-        .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-        .Select(g => g.First())
-        .ToList();
+    private IReadOnlyList<string> KnownAccounts() => WishListing.KnownAccounts(
+        _purchases.Concat(_wishes).Select(w => w.Item), _platformAccounts.Values, PurchaseAccount.Text, PlatformAccountBox.Text);
 
     /// <summary>账号框旁边的下拉：列出填过的账号，点一下填进这个框。</summary>
     private void PickAccount_Click(object sender, RoutedEventArgs e)
@@ -1005,7 +787,7 @@ public partial class MainWindow
         var menu = new ContextMenu { PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
         var accounts = KnownAccounts();
         if (accounts.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "还没有填过账号。填过一次以后，可以在这里直接选", IsEnabled = false });
+            menu.Items.Add(new MenuItem { Header = WishListing.NoAccounts, IsEnabled = false });
         foreach (var account in accounts)
         {
             // 用 TextBlock 当标题：账号里的下划线不会被当成快捷键吃掉。
@@ -1032,22 +814,8 @@ public partial class MainWindow
             return;
         try
         {
-            // 粘贴的文本常常没写厂家，按插件名补上，才能归到厂家账号下。
-            var guessedCount = 0;
-            var drafts = dialog.Drafts.Select(d =>
-            {
-                if (d.Vendor.Length > 0)
-                    return d;
-                var vendor = GuessVendor(d.Name);
-                if (vendor.Length > 0)
-                    guessedCount++;
-                return d with { Vendor = vendor };
-            }).ToList();
-            var result = _database.UpsertPurchased(drafts);
+            StatusText.Text = WishListing.AddPurchases(_database, dialog.Drafts, _plugins.Select(p => p.Row).ToList());
             LoadItems();
-            StatusText.Text = $"新增 {result.Added} 款，更新 {result.Updated} 款"
-                + (guessedCount > 0 ? $"，{guessedCount} 款按插件名自动填了厂家" : "")
-                + DescribeAssignment(result.NewPlatforms, 0);
         }
         catch (Microsoft.Data.Sqlite.SqliteException error)
         {
@@ -1055,47 +823,26 @@ public partial class MainWindow
         }
     }
 
-    private static string DescribeAssignment(IReadOnlyList<string>? newPlatforms, int own)
-    {
-        var text = newPlatforms is { Count: > 0 } ? $"；新建厂家账号：{string.Join("、", newPlatforms)}" : "";
-        if (own > 0)
-            text += $"；{own} 款和已有的厂家账号不一样，存成了单独账号";
-        return text;
-    }
-
     private void ExportLogins_Click(object sender, RoutedEventArgs e)
     {
         FlushItems();
-        if (!Dialogs.Confirm(this, "导出明文账号？",
-                "导出的文件里账号、密码、序列号都是明文，任何拿到文件的人都能看到。\n\n这个功能用于换电脑或重装系统：加密内容绑定当前 Windows 账号，重装后解不开。迁移完请删除这个文件。",
-                "继续导出"))
+        if (!Dialogs.Confirm(this, "导出明文账号？", WishListing.ExportWarning, "继续导出"))
             return;
 
         var dialog = new SaveFileDialog
         {
             Title = "导出账号",
             Filter = "文本文件 (*.txt)|*.txt",
-            FileName = $"WhatPlugin-账号-{DateTime.Now:yyyyMMdd}.txt",
+            FileName = WishListing.ExportFileName(DateTime.Now),
         };
         if (dialog.ShowDialog(this) != true)
             return;
 
         try
         {
-            // 跟随厂家的插件导出厂家账号，这样导入后能重新归到厂家账号下。
-            var platforms = PurchaseLogin.ByKey(_database.LoadPlatformAccounts());
-            var items = _database.LoadWishes()
-                .Select(w => (Item: w, Login: PurchaseLogin.Resolve(w, platforms)))
-                .Where(x => x.Login.HasAny || x.Item.Serial.Length > 0 || x.Item.SecretsLocked)
-                .Select(x => x.Item with
-                {
-                    Account = x.Login.Account,
-                    Password = x.Login.Password,
-                    SecretsLocked = x.Item.SecretsLocked || x.Login.Locked,
-                })
-                .ToList();
+            var items = WishListing.ExportItems(_database.LoadWishes(), _database.LoadPlatformAccounts());
             File.WriteAllText(dialog.FileName, PurchaseText.Format(items, out var skipped));
-            StatusText.Text = $"已导出 {items.Count - skipped.Count} 款的账号" + (skipped.Count > 0 ? $"，{skipped.Count} 款无法导出：{string.Join("、", skipped)}" : "");
+            StatusText.Text = WishListing.Exported(items.Count, skipped);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {

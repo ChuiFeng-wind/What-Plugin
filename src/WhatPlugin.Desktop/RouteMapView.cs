@@ -43,7 +43,8 @@ public sealed class RouteMapView : Panel
 
     public RouteMapView()
     {
-        _zoom = new LayoutTransformControl { Child = _canvas };
+        // 缩小后从左上角开始画，不要居中漂到中间或下面。
+        _zoom = new LayoutTransformControl { Child = _canvas, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
         _scroll = new ScrollViewer
         {
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,

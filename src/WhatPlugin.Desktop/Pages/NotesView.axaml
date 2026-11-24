@@ -1,0 +1,230 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:core="clr-namespace:WhatPlugin.Core;assembly=WhatPlugin.Core"
+             xmlns:local="clr-namespace:WhatPlugin.Desktop"
+             x:Class="WhatPlugin.Desktop.NotesView">
+    <UserControl.Styles>
+        <Style Selector="Border.StepCard">
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+        </Style>
+        <Style Selector="Border.StepCard.Selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+        </Style>
+        <Style Selector="mi|MaterialIcon.Folder">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+        </Style>
+    </UserControl.Styles>
+    <!-- 和 Windows 版一样：左边是笔记和文件夹的树，中间是选中的笔记（或文件夹、多选），右边是可以添加的插件。只是记录，不会写入 DAW。 -->
+    <Grid ColumnDefinitions="250,14,*,14,280" Margin="0,0,0,18">
+        <!-- 左：树 -->
+        <Border Classes="Card" Padding="8">
+            <DockPanel>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                    <TextBox x:Name="TreeSearch" PlaceholderText="搜索笔记、标签或插件" AutomationProperties.Name="搜索混音笔记"/>
+                    <ToggleButton x:Name="MultiToggle" Grid.Column="1" Classes="Chip" Content="多选" Margin="6,0,0,0" VerticalAlignment="Center"
+                                  AutomationProperties.Name="多选"/>
+                </Grid>
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <TextBox x:Name="NewNameBox" PlaceholderText="名称" AutomationProperties.Name="新笔记或文件夹的名称"/>
+                    <Grid ColumnDefinitions="*,6,*" Margin="0,6,0,0">
+                        <Button x:Name="AddChainButton" Classes="Primary" Content="新建笔记" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                ToolTip.Tip="建在左边选中的文件夹里"/>
+                        <Button x:Name="AddFolderButton" Grid.Column="2" Content="新建文件夹" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                ToolTip.Tip="建在左边选中的文件夹里"/>
+                    </Grid>
+                </StackPanel>
+                <TreeView x:Name="NoteTree" Classes="Folders" SelectionMode="Multiple" AutomationProperties.Name="混音笔记分层">
+                    <TreeView.Styles>
+                        <Style Selector="TreeViewItem" x:DataType="local:NoteItem">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                        </Style>
+                    </TreeView.Styles>
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate x:DataType="local:NoteItem" ItemsSource="{Binding Children}">
+                            <DockPanel ToolTip.Tip="{Binding ToolTip}" Background="Transparent" MinHeight="26">
+                                <CheckBox DockPanel.Dock="Left" Classes="Mark" IsVisible="{Binding ShowMarkBox}" MinWidth="0" Margin="0,0,4,0"
+                                          IsChecked="{Binding $parent[TreeViewItem].IsSelected, Mode=TwoWay}" AutomationProperties.Name="选中"/>
+                                <mi:MaterialIcon DockPanel.Dock="Left" Kind="{Binding Icon}" Width="15" Height="15" Margin="0,0,7,0" Classes.Folder="{Binding IsFolder}"/>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="6,0,4,0"
+                                           IsVisible="{Binding IsShowingName}"/>
+                                <Panel>
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" IsVisible="{Binding IsShowingName}"/>
+                                    <TextBox Classes="Rename" Text="{Binding EditText, Mode=TwoWay}" IsVisible="{Binding IsEditing}" MinHeight="26" Padding="6,2"
+                                             AutomationProperties.Name="新的名称"/>
+                                </Panel>
+                            </DockPanel>
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </DockPanel>
+        </Border>
+
+        <!-- 中：笔记、文件夹或多选 -->
+        <Border Grid.Column="2" Classes="Card" ClipToBounds="True">
+            <Panel>
+                <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="360">
+                    <mi:MaterialIcon Kind="LinkVariant" Width="34" Height="34" Foreground="{DynamicResource LineStrong}"/>
+                    <TextBlock x:Name="EmptyText" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap" TextAlignment="Center"/>
+                </StackPanel>
+
+                <!-- 多选 -->
+                <DockPanel x:Name="BatchPanel" Margin="20,18,18,18" IsVisible="False">
+                    <StackPanel DockPanel.Dock="Top">
+                        <WrapPanel HorizontalAlignment="Right">
+                            <Button x:Name="BatchClearButton" Classes="Ghost" Content="取消选择" ToolTip.Tip="Esc" Margin="0,0,4,0"/>
+                            <Button x:Name="BatchTagAddButton" Classes="Ghost" Content="加标签…" Margin="0,0,4,0"/>
+                            <Button x:Name="BatchTagRemoveButton" Classes="Ghost" Content="去掉标签…" Margin="0,0,4,0"/>
+                            <Button x:Name="BatchMoveButton" Classes="Ghost" Margin="0,0,4,0" AutomationProperties.Name="移动选中的到…">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="FolderMoveOutline" Width="15" Height="15" Margin="0,0,6,0"/><TextBlock Text="移动到…"/></StackPanel>
+                            </Button>
+                            <Button x:Name="BatchDeleteButton" Classes="Ghost" AutomationProperties.Name="删除选中的">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="DeleteOutline" Width="15" Height="15" Margin="0,0,6,0" Foreground="{DynamicResource Danger}"/><TextBlock Text="删除" Foreground="{DynamicResource Danger}"/></StackPanel>
+                            </Button>
+                        </WrapPanel>
+                        <TextBlock x:Name="BatchTitle" FontSize="19" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Name="BatchMeta" Classes="SmallNote" Margin="0,4,0,10"/>
+                    </StackPanel>
+                    <ListBox x:Name="BatchList" Classes="Plugins" AutomationProperties.Name="选中的笔记和文件夹">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:BatchRow">
+                                <DockPanel Height="38" Margin="12,0">
+                                    <mi:MaterialIcon DockPanel.Dock="Left" Kind="{Binding Icon}" Width="15" Height="15" Margin="0,0,8,0" Foreground="{DynamicResource Muted}"/>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Path}" Classes="SmallNote" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <!-- 文件夹 -->
+                <DockPanel x:Name="FolderPanel" Margin="20,18,18,18" IsVisible="False">
+                    <StackPanel DockPanel.Dock="Top">
+                        <WrapPanel HorizontalAlignment="Right">
+                            <Button x:Name="FolderRenameButton" Classes="Ghost" Margin="0,0,4,0" AutomationProperties.Name="重命名">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="RenameOutline" Width="15" Height="15" Margin="0,0,6,0"/><TextBlock Text="重命名"/></StackPanel>
+                            </Button>
+                            <Button x:Name="FolderMoveButton" Classes="Ghost" Margin="0,0,4,0" AutomationProperties.Name="移动到…">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="FolderMoveOutline" Width="15" Height="15" Margin="0,0,6,0"/><TextBlock Text="移动到…"/></StackPanel>
+                            </Button>
+                            <Button x:Name="FolderDeleteButton" Classes="Ghost" AutomationProperties.Name="删除">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="DeleteOutline" Width="15" Height="15" Margin="0,0,6,0" Foreground="{DynamicResource Danger}"/><TextBlock Text="删除" Foreground="{DynamicResource Danger}"/></StackPanel>
+                            </Button>
+                        </WrapPanel>
+                        <TextBlock x:Name="FolderTitle" FontSize="19" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="FolderMeta" Classes="SmallNote" Margin="0,4,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,10">
+                            <RadioButton x:Name="FolderListToggle" Classes="Segment" GroupName="FolderView" Content="笔记列表" IsChecked="True" MinWidth="86" Margin="0,0,6,0"/>
+                            <RadioButton x:Name="FolderMapToggle" Classes="Segment" GroupName="FolderView" Content="路由图" MinWidth="86" AutomationProperties.Name="路由图"/>
+                        </StackPanel>
+                        <TextBlock x:Name="FolderListHint" Classes="SmallNote" Margin="0,0,0,10" TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <Panel>
+                        <ListBox x:Name="FolderNotes" Classes="Plugins" AutomationProperties.Name="文件夹里的笔记">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="core:NoteSummaryRow">
+                                    <StackPanel Margin="12,7">
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Summary}" Classes="SmallNote" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <Border x:Name="FolderMapHost" IsVisible="False" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" ClipToBounds="True"/>
+                    </Panel>
+                </DockPanel>
+
+                <!-- 笔记 -->
+                <ScrollViewer x:Name="ChainPanel" VerticalScrollBarVisibility="Auto" IsVisible="False">
+                    <StackPanel Margin="20,18,18,20">
+                        <WrapPanel HorizontalAlignment="Right">
+                            <Button x:Name="WishMissingButton" Classes="Ghost" Margin="0,0,4,0"
+                                    ToolTip.Tip="把这条笔记里没安装的首选和备选插件都加入心愿单，已经在心愿单里的跳过">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="HeartOutline" Width="15" Height="15" Margin="0,0,6,0"/><TextBlock x:Name="WishMissingText" Text="未安装的加入心愿单"/></StackPanel>
+                            </Button>
+                            <Button x:Name="ChainRenameButton" Classes="Ghost" Margin="0,0,4,0" AutomationProperties.Name="重命名">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="RenameOutline" Width="15" Height="15" Margin="0,0,6,0"/><TextBlock Text="重命名"/></StackPanel>
+                            </Button>
+                            <Button x:Name="ChainMoveButton" Classes="Ghost" Margin="0,0,4,0" AutomationProperties.Name="移动到…">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="FolderMoveOutline" Width="15" Height="15" Margin="0,0,6,0"/><TextBlock Text="移动到…"/></StackPanel>
+                            </Button>
+                            <Button x:Name="ChainDeleteButton" Classes="Ghost" AutomationProperties.Name="删除">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="DeleteOutline" Width="15" Height="15" Margin="0,0,6,0" Foreground="{DynamicResource Danger}"/><TextBlock Text="删除" Foreground="{DynamicResource Danger}"/></StackPanel>
+                            </Button>
+                        </WrapPanel>
+                        <TextBlock x:Name="ChainTitle" FontSize="19" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ChainMeta" Classes="SmallNote" Margin="0,4,0,0" TextWrapping="Wrap"/>
+
+                        <WrapPanel x:Name="TagChips" Margin="0,12,0,0" AutomationProperties.Name="笔记标签"/>
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,0">
+                            <TextBox x:Name="NewTagBox" PlaceholderText="自定义标签，例如：说唱、氛围" AutomationProperties.Name="添加自定义标签"/>
+                            <Button x:Name="AddTagButton" Grid.Column="1" Classes="Ghost" Content="添加标签" Margin="6,0,0,0"/>
+                        </Grid>
+
+                        <TextBox x:Name="ChainNote" Classes="Multiline" MinHeight="70" Margin="0,10,0,0"
+                                 PlaceholderText="整体思路：用在什么场景、增益怎么打、哪一步不能省…" AutomationProperties.Name="整体思路"/>
+
+                        <!-- 路由 -->
+                        <Border Background="{DynamicResource Bg1}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,12,0,0"
+                                AutomationProperties.Name="路由">
+                            <StackPanel>
+                                <WrapPanel>
+                                    <mi:MaterialIcon Kind="SourceBranch" Width="15" Height="15" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
+                                    <TextBlock Text="类型" Classes="SmallNote" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <ComboBox x:Name="RoleBox" MinWidth="120" Margin="0,0,16,0" AutomationProperties.Name="通道类型"/>
+                                    <TextBlock Text="输出到" Classes="SmallNote" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <ComboBox x:Name="OutputBox" MinWidth="160" AutomationProperties.Name="输出到"
+                                              ToolTip.Tip="这条笔记的通道输出到哪里：主输出，或同文件夹里的编组 / 总线"/>
+                                </WrapPanel>
+                                <TextBlock x:Name="RouteIncoming" Classes="SmallNote" Margin="0,8,0,0" TextTrimming="CharacterEllipsis"/>
+                                <WrapPanel x:Name="RouteSends" Margin="0,6,0,0" AutomationProperties.Name="发送"/>
+                                <WrapPanel x:Name="RouteSidechains" Margin="0,2,0,0" AutomationProperties.Name="侧链"/>
+                            </StackPanel>
+                        </Border>
+
+                        <ItemsControl x:Name="StepList" Margin="0,12,0,0" AutomationProperties.Name="链上的步骤"/>
+                        <TextBlock x:Name="StepsEmpty" Text="从右边添加插件，先加的排在前面" Foreground="{DynamicResource Muted}" Margin="0,16,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Panel>
+        </Border>
+
+        <!-- 右：可以添加的插件 -->
+        <Border Grid.Column="4" Classes="Card" Padding="10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBox x:Name="CandidateSearch" PlaceholderText="搜索要添加的插件" AutomationProperties.Name="搜索要添加的插件"/>
+                    <TextBlock x:Name="CandidateLabel" Classes="FieldLabel" Margin="2,10,0,0"/>
+                    <TextBlock x:Name="CandidateHint" Classes="SmallNote" Margin="2,2,0,8" TextWrapping="Wrap"/>
+                </StackPanel>
+                <Panel>
+                    <ListBox x:Name="CandidateList" Classes="Plugins" AutomationProperties.Name="可以添加的插件">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:CandidateItem">
+                                <DockPanel Margin="10,6,4,6">
+                                    <Button DockPanel.Dock="Right" Classes="Ghost AddStep" Tag="{Binding Key}" Width="28" Height="28" Padding="0"
+                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                            ToolTip.Tip="加成新的一步" AutomationProperties.Name="{Binding Name, StringFormat='添加 {0}'}">
+                                        <mi:MaterialIcon Kind="Plus" Width="15" Height="15"/>
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Classes="Ghost AddAlternate" Tag="{Binding Key}" Width="28" Height="28" Padding="0"
+                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                            ToolTip.Tip="加为选中那一步的备选" AutomationProperties.Name="{Binding Name, StringFormat='把 {0} 加为备选'}">
+                                        <mi:MaterialIcon Kind="SwapHorizontal" Width="15" Height="15"/>
+                                    </Button>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Detail}" Classes="SmallNote" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock x:Name="CandidatesEmpty" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="12" IsVisible="False"/>
+                </Panel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

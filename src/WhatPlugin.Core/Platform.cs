@@ -12,6 +12,9 @@ public static class AppPlatform
     public static bool IsWindows => OperatingSystem.IsWindows();
     public static bool IsMac => OperatingSystem.IsMacOS();
 
+    /// <summary>多选用的修饰键名称：Mac 上是 Command，其他系统是 Ctrl。</summary>
+    public static string CommandKeyName => IsMac ? "Command" : "Ctrl";
+
     private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     /// <summary>

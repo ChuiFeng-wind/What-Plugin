@@ -6,52 +6,27 @@ using WhatPlugin.Core;
 
 namespace WhatPlugin.App;
 
-/// <summary>厂家账号表的一行：一个账号平台，以及跟随它的已购插件。</summary>
-public sealed class PlatformRow : INotifyPropertyChanged
+/// <summary>厂家账号表的一行。文字来自 Core 的 <see cref="PlatformEntry"/>。</summary>
+public sealed class PlatformRow(PlatformEntry entry) : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public PlatformRow(string platform, PlatformAccount? account, IReadOnlyList<WishItem> followers)
-    {
-        Platform = platform;
-        Account = account ?? new PlatformAccount(platform);
-        Followers = followers;
-    }
+    public PlatformEntry Entry { get; private set; } = entry;
 
-    public string Platform { get; }
-    public PlatformAccount Account { get; private set; }
-    public IReadOnlyList<WishItem> Followers { get; }
-
-    /// <summary>这个平台的插件用 iLok 激活（iLok 那条自己除外）。</summary>
-    public bool UsesILok => !ILokFill.IsILok(Platform)
-        && (VendorCatalog.UsesILok(Platform) || Followers.Any(f => VendorCatalog.UsesILok(f.Vendor)));
-
-    public int Count => Followers.Count;
-    public string CountText => Count > 0 ? $"{Count} 款" : "暂无";
-    public string AccountText => Account.Account.Length > 0 ? Account.Account : "未填";
-    public string PasswordMask => Account.Locked ? "无法解开" : Account.Password.Length > 0 ? "••••••••" : "未填";
-
-    /// <summary>平台下面有哪些品牌，例如 Plugin Alliance 下的 brainworx、SPL。</summary>
-    public string VendorsText
-    {
-        get
-        {
-            var vendors = Followers.Select(f => VendorCatalog.DisplayVendor(f.Vendor)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            if (ILokFill.IsILok(Platform))
-                return "iLok 账号，可以用上方“填入 iLok 账号”填到用 iLok 激活的厂家";
-            var ilok = Followers.Any(f => VendorCatalog.UsesILok(f.Vendor)) || VendorCatalog.UsesILok(Platform) ? "用 iLok 激活 · " : "";
-            if (vendors.Count == 0 || (vendors.Count == 1 && vendors[0] == Platform))
-                return ilok + (Account.Note.Length > 0 ? Account.Note.ReplaceLineEndings(" ") : "厂家账号");
-            return ilok + "含 " + string.Join("、", vendors.Take(4)) + (vendors.Count > 4 ? $" 等 {vendors.Count} 个品牌" : "");
-        }
-    }
-
-    public string SearchText => string.Join(' ', Platform, Account.Account, Account.Note, VendorsText,
-        string.Join(' ', Followers.Select(f => f.Name))).ToLowerInvariant();
+    public string Platform => Entry.Platform;
+    public PlatformAccount Account => Entry.Account;
+    public IReadOnlyList<WishItem> Followers => Entry.Followers;
+    public bool UsesILok => Entry.UsesILok;
+    public int Count => Entry.Count;
+    public string CountText => Entry.CountText;
+    public string AccountText => Entry.AccountText;
+    public string PasswordMask => Entry.PasswordMask;
+    public string VendorsText => Entry.VendorsText;
+    public string SearchText => Entry.SearchText;
 
     public void Update(PlatformAccount account)
     {
-        Account = account;
+        Entry = Entry with { Account = account };
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
     }
 }
@@ -68,27 +43,7 @@ public partial class MainWindow
     private void LoadPlatforms()
     {
         var selected = _currentPlatform?.Platform;
-        var followers = _purchases
-            .Where(p => !p.Item.OwnLogin && VendorCatalog.PlatformOf(p.Item.Vendor).Length > 0)
-            .GroupBy(p => VendorCatalog.PlatformKey(VendorCatalog.PlatformOf(p.Item.Vendor)))
-            .ToDictionary(g => g.Key, g => g.Select(p => p.Item).OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList());
-
-        var rows = new List<PlatformRow>();
-        foreach (var (key, account) in _platformAccounts)
-            rows.Add(new PlatformRow(account.Platform, account, followers.GetValueOrDefault(key) ?? []));
-        foreach (var (key, items) in followers)
-        {
-            if (!_platformAccounts.ContainsKey(key))
-                rows.Add(new PlatformRow(VendorCatalog.PlatformOf(items[0].Vendor), null, items));
-        }
-        // iLok 那条总是放在最上面，没填也显示，方便先填它再一键填到各厂家。
-        if (!rows.Any(r => ILokFill.IsILok(r.Platform)))
-            rows.Add(new PlatformRow(ILokFill.Platform, null, []));
-        _platformRows = rows
-            .OrderBy(r => !ILokFill.IsILok(r.Platform))
-            .ThenBy(r => r.Account.Account.Length == 0)
-            .ThenBy(r => r.Platform, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        _platformRows = PlatformListing.Build(_purchases.Select(p => p.Item), _platformAccounts).Select(e => new PlatformRow(e)).ToList();
 
         _currentPlatform = null;
         _platformView = new ListCollectionView(_platformRows) { Filter = MatchesPlatform };
@@ -100,8 +55,7 @@ public partial class MainWindow
 
     private bool MatchesPlatform(object item)
     {
-        var search = AccountSearchBox.Text.Trim().ToLowerInvariant();
-        return search.Length == 0 || search.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(((PlatformRow)item).SearchText.Contains);
+        return WishListing.Matches(((PlatformRow)item).SearchText, AccountSearchBox.Text);
     }
 
     private void UpdatePlatformEmpty()
@@ -153,12 +107,8 @@ public partial class MainWindow
         _loadingItem = false;
         PlatformPassword.IsEnabled = !row.Account.Locked;
         PlatformLocked.Visibility = row.Account.Locked ? Visibility.Visible : Visibility.Collapsed;
-        PlatformSubtitle.Text = ILokFill.IsILok(row.Platform)
-            ? "在这里填一次 iLok 账号和密码，再点上方“填入 iLok 账号”，就能填到用 iLok 激活的厂家。以后改了密码，再点一次即可同步。"
-            : row.Count > 0
-                ? $"{row.Count} 款插件跟随这个账号。修改后它们一起生效；需要分开的，在插件详情里改成“单独账号”。"
-                : "目前没有插件跟随这个账号。";
-        PlatformProducts.Text = row.Count > 0 ? string.Join("、", row.Followers.Select(f => f.Name)) : "无";
+        PlatformSubtitle.Text = row.Entry.Subtitle;
+        PlatformProducts.Text = row.Entry.ProductsText;
         PlatformDelete.IsEnabled = !row.Account.IsEmpty;
     }
 
@@ -202,7 +152,7 @@ public partial class MainWindow
             purchase.Update(purchase.Item, PurchaseLogin.Resolve(purchase.Item, _platformAccounts));
         PlatformDelete.IsEnabled = !updated.IsEmpty;
         UpdateItemSummaries();
-        StatusText.Text = $"已保存 {updated.Platform} 的厂家账号" + (_currentPlatform.Count > 0 ? $"，{_currentPlatform.Count} 款插件一起生效" : "");
+        StatusText.Text = _currentPlatform.Entry.Saved;
     }
 
     private void CopyPlatformAccount_Click(object sender, RoutedEventArgs e)
@@ -216,31 +166,17 @@ public partial class MainWindow
         FlushItems();
         var ilokRow = _platformRows.FirstOrDefault(r => ILokFill.IsILok(r.Platform));
         var ilok = ilokRow?.Account;
-        if (ilok == null || ilok.Account.Length == 0)
+        if (PlatformListing.ILokProblem(ilok, _platformRows.Select(r => r.Entry).ToList()) is { } problem)
         {
-            PlatformGrid.SelectedItem = ilokRow;
-            StatusText.Text = "先在最上面的“iLok”里填好 iLok 账号和密码，再点“填入 iLok 账号”";
-            return;
-        }
-        if (ilok.Locked)
-        {
-            StatusText.Text = "iLok 的密码是在另一个 Windows 账号下加密的，这里解不开，不能填入";
+            if (problem == PlatformListing.ILokFirst)
+                PlatformGrid.SelectedItem = ilokRow;
+            StatusText.Text = problem;
             return;
         }
 
-        var targets = _platformRows.Where(r => r.UsesILok).ToList();
-        if (targets.Count == 0)
-        {
-            StatusText.Text = "已购插件里还没有用 iLok 激活的厂家";
-            return;
-        }
-        var plans = targets.Select(r => (Row: r, Result: ILokFill.Apply(ilok, r.Account))).ToList();
-        var items = plans.Select(p => (
-            $"{p.Row.Platform}（{p.Row.Count} 款）：{ILokFill.Describe(p.Result.Action)}",
-            p.Result.Action is ILokFillAction.Filled or ILokFillAction.Synced or ILokFillAction.NoteAdded)).ToList();
-        var picked = Dialogs.PickMany(this, "填入 iLok 账号",
-            $"把 iLok 账号 {ilok.Account} 填到下面这些用 iLok 激活的厂家。已经填了别的账号的不会覆盖，只在备注里记下 iLok 账号名；密码不会写进备注。",
-            items, "填入");
+        var plans = PlatformListing.ILokPlan(ilok!, _platformRows.Select(r => r.Entry));
+        var picked = Dialogs.PickMany(this, "填入 iLok 账号", PlatformListing.ILokPrompt(ilok!),
+            plans.Select(p => (p.Text, p.Checked)).ToList(), "填入");
         if (picked == null)
             return;
 
@@ -249,7 +185,7 @@ public partial class MainWindow
         {
             foreach (var index in picked)
             {
-                var (row, result) = plans[index];
+                var (row, result, _, _) = plans[index];
                 if (result.Action is ILokFillAction.Unchanged or ILokFillAction.Skipped)
                     continue;
                 _database.SavePlatformAccount(result.Updated);
@@ -263,7 +199,7 @@ public partial class MainWindow
         }
         _itemSaveTimer.Stop();
         LoadItems();
-        StatusText.Text = changed.Count > 0 ? $"已填入 iLok 账号：{string.Join("、", changed)}" : "没有需要改动的厂家";
+        StatusText.Text = PlatformListing.ILokFilled(changed);
     }
 
     private void PlatformDelete_Click(object sender, RoutedEventArgs e)
@@ -272,9 +208,7 @@ public partial class MainWindow
             return;
         FlushItems();
         var row = _currentPlatform;
-        var message = $"{row.Platform} 的账号、密码和备注会删除，无法恢复。"
-            + (row.Count > 0 ? $"\n\n跟随它的 {row.Count} 款插件会变成“未填”。设为单独账号的插件不受影响。" : "");
-        if (!Dialogs.Confirm(this, "清空这个厂家账号？", message, "清空", danger: true))
+        if (!Dialogs.Confirm(this, "清空这个厂家账号？", row.Entry.DeletePrompt, "清空", danger: true))
             return;
         try
         {

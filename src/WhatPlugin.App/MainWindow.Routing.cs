@@ -14,13 +14,7 @@ public partial class MainWindow
     private bool _folderShowsMap;
     private bool _folderMapHooked;
 
-    private static readonly (ChannelRole Role, string Text)[] RoleOptions =
-    [
-        (ChannelRole.Track, "轨道"),
-        (ChannelRole.Group, "编组 / 总线"),
-        (ChannelRole.Effect, "效果轨"),
-        (ChannelRole.Master, "主输出"),
-    ];
+    private static readonly (ChannelRole Role, string Text)[] RoleOptions = [.. NoteRouting.RoleOptions];
 
     public static string RoleGlyph(ChannelRole role) => role switch
     {
@@ -33,14 +27,9 @@ public partial class MainWindow
     private void ReloadRoutes() => _routes = _database.LoadRoutes();
 
     /// <summary>同一个文件夹里的其他笔记，编组、效果轨、主输出排在前面。</summary>
-    private List<PluginChain> RouteCandidates(PluginChain chain) => _chains
-        .Where(c => c.Id != chain.Id && c.FolderId == chain.FolderId)
-        .OrderBy(c => c.Role switch { ChannelRole.Group => 0, ChannelRole.Effect => 1, ChannelRole.Master => 2, _ => 3 })
-        .ThenBy(c => c.Name, StringComparer.CurrentCulture)
-        .ToList();
+    private List<PluginChain> RouteCandidates(PluginChain chain) => NoteRouting.Candidates(chain, _chains);
 
-    private string NoteLabel(PluginChain chain) =>
-        chain.Role == ChannelRole.Track ? chain.Name : $"{chain.Name}（{TrackRouting.RoleText(chain.Role)}）";
+    private static string NoteLabel(PluginChain chain) => NoteRouting.Label(chain);
 
     private void ShowRoutePanel(PluginChain chain)
     {
@@ -147,18 +136,18 @@ public partial class MainWindow
     /// <summary>选一条同文件夹里的笔记，再选它上面接收侧链的插件。</summary>
     private void AddSidechain(PluginChain chain)
     {
-        var options = RouteCandidates(chain).Where(c => c.Steps.Count > 0).ToList();
+        var options = NoteRouting.SidechainOptions(chain, _chains);
         if (options.Count == 0)
         {
-            StatusText.Text = "同一个文件夹里没有带插件的笔记可以接侧链";
+            StatusText.Text = NoteRouting.NoSidechainTargets;
             return;
         }
-        var index = Dialogs.PickOne(this, $"“{chain.Name}”的侧链送到", "选接收侧链的那条通道（例如混响效果轨），下一步再选它上面的插件（例如 Pro-C 2）。",
+        var index = Dialogs.PickOne(this, $"“{chain.Name}”的侧链送到", NoteRouting.SidechainPrompt,
             options.Select(NoteLabel).ToList(), "下一步");
         if (index == null)
             return;
         var target = options[index.Value];
-        var plugins = target.Steps.Select(s => s.PluginName).Where(n => n.Length > 0).Distinct().ToList();
+        var plugins = NoteRouting.SidechainPlugins(target).ToList();
         var pick = plugins.Count == 1 ? 0 : Dialogs.PickOne(this, $"“{target.Name}”上哪个插件接收侧链", "选接收侧链信号的插件。", plugins, "添加");
         if (pick == null)
             return;
@@ -168,27 +157,22 @@ public partial class MainWindow
 
     private void SaveSidechains(PluginChain chain, Func<IEnumerable<(long Target, string Plugin)>, IEnumerable<(long Target, string Plugin)>> change)
     {
-        var mine = _routes.Where(r => r.From == chain.Id).ToList();
-        var output = mine.FirstOrDefault(r => r.Kind == RouteKind.Output)?.To;
-        var sends = mine.Where(r => r.Kind == RouteKind.Send).Select(r => r.To).ToList();
-        var sidechains = change(mine.Where(r => r.Kind == RouteKind.Sidechain).Select(r => (r.To, r.Plugin))).ToList();
-        _database.SetRoutes(chain.Id, output, sends, sidechains);
+        NoteRouting.SaveSidechains(_database, chain.Id, _routes, change);
         ReloadRoutes();
         if (_shownChain?.Id == chain.Id)
             ShowRoutePanel(chain);
-        StatusText.Text = "路由已保存";
+        StatusText.Text = NoteRouting.Saved;
     }
 
     private void AddSend(PluginChain chain)
     {
-        var existing = _routes.Where(r => r.From == chain.Id && r.Kind == RouteKind.Send).Select(r => r.To).ToHashSet();
-        var options = RouteCandidates(chain).Where(c => !existing.Contains(c.Id) && c.Role != ChannelRole.Master).ToList();
+        var options = NoteRouting.SendOptions(chain, _chains, _routes);
         if (options.Count == 0)
         {
-            StatusText.Text = "同一个文件夹里没有可以发送到的笔记。先新建一条，比如“混响”，类型选效果轨";
+            StatusText.Text = NoteRouting.NoSendTargets;
             return;
         }
-        var index = Dialogs.PickOne(this, $"“{chain.Name}”发送到", "选一条同文件夹里的笔记，通常是效果轨（混响、延迟）或并行处理用的总线。",
+        var index = Dialogs.PickOne(this, $"“{chain.Name}”发送到", NoteRouting.SendPrompt,
             options.Select(NoteLabel).ToList(), "添加");
         if (index == null)
             return;
@@ -203,7 +187,7 @@ public partial class MainWindow
         _database.SetChainRole(chain.Id, role);
         RememberExpansion();
         LoadChains(selectChain: chain.Id);
-        StatusText.Text = $"“{chain.Name}”标为{TrackRouting.RoleText(role)}";
+        StatusText.Text = NoteRouting.RoleChanged(chain, role);
     }
 
     private void RouteOutput_Changed(object sender, SelectionChangedEventArgs e)
@@ -217,16 +201,11 @@ public partial class MainWindow
     /// <summary>改输出或发送后保存并刷新路由区（不重建左边的树）。</summary>
     private void SaveRoutes(PluginChain chain, long? output = null, bool changeOutput = false, Func<IEnumerable<long>, IEnumerable<long>>? sendsChange = null)
     {
-        var mine = _routes.Where(r => r.From == chain.Id).ToList();
-        var currentOutput = mine.FirstOrDefault(r => r.Kind == RouteKind.Output)?.To;
-        var sends = mine.Where(r => r.Kind == RouteKind.Send).Select(r => r.To);
-        if (sendsChange != null)
-            sends = sendsChange(sends);
-        _database.SetRoutes(chain.Id, changeOutput ? output : currentOutput, sends.ToList());
+        NoteRouting.SaveRoutes(_database, chain.Id, _routes, output, changeOutput, sendsChange);
         ReloadRoutes();
         if (_shownChain?.Id == chain.Id)
             ShowRoutePanel(chain);
-        StatusText.Text = "路由已保存";
+        StatusText.Text = NoteRouting.Saved;
     }
 
     // ---------- 文件夹的路由图 ----------
@@ -252,11 +231,7 @@ public partial class MainWindow
             FolderMap.OpenNote += FolderMap_Open;
             _folderMapHooked = true;
         }
-        var rows = _database.LoadPlugins();
-        var installed = rows.Where(p => !p.IsMissing).Select(p => p.Key).ToHashSet();
-        FolderMap.Show(notes, _routes, chain => chain.Steps
-            .Select(s => (s.PluginName, Installed: s.PluginKey.Length > 0 && installed.Contains(s.PluginKey)))
-            .ToList());
+        FolderMap.Show(notes, _routes, NoteRouting.MapPlugins(_database.LoadPlugins()));
     }
 
     private void FolderMap_Open(long chainId) => LoadChains(selectChain: chainId);

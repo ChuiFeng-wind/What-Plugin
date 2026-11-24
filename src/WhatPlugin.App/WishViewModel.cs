@@ -4,48 +4,43 @@ using WhatPlugin.Core;
 
 namespace WhatPlugin.App;
 
-/// <summary>心愿单卡片和已购表格的一行。密码只显示遮罩，不进搜索文本。</summary>
+/// <summary>心愿单卡片和已购表格的一行。文字来自 Core 的 <see cref="WishRow"/>；密码只显示遮罩，不进搜索文本。</summary>
 public sealed class WishViewModel(WishItem item, bool installed, EffectiveLogin? login = null) : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public WishItem Item { get; private set; } = item;
+    public WishRow Row { get; private set; } = login == null ? new WishRow(item, installed) : new WishRow(item, installed, login);
+
+    public WishItem Item => Row.Item;
 
     /// <summary>实际使用的账号密码：跟随厂家时来自厂家账号。</summary>
-    public EffectiveLogin Login { get; private set; } = login ?? new EffectiveLogin(item.Account, item.Password, item.SecretsLocked, false, "");
+    public EffectiveLogin Login => Row.Login;
 
-    /// <summary>账号、密码或序列号至少有一项可用。</summary>
-    public bool HasLogin => Login.HasAny || Item.Serial.Length > 0;
-    public bool IsInstalled { get; } = installed;
+    public bool HasLogin => Row.HasLogin;
+    public bool IsInstalled => Row.IsInstalled;
 
-    public string Name => Item.Name;
-    public string VendorText => Item.Vendor.Length > 0 ? Item.Vendor : "厂家未填";
-    public string PriceText => Item.Price == null ? "未定价" : Money.Format(Item.Price, Item.Currency);
-    public bool HasPrice => Item.Price != null;
-    public string ReasonLine => Item.Reason.Length > 0 ? Item.Reason.ReplaceLineEndings(" ") : "还没写为什么想买";
+    public string Name => Row.Name;
+    public string VendorText => Row.VendorText;
+    public string PriceText => Row.PriceText;
+    public bool HasPrice => Row.HasPrice;
+    public string ReasonLine => Row.ReasonLine;
     public Visibility InstalledVisibility => IsInstalled ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility TargetVisibility => PurchaseAdvisor.ReachedTarget(Item) ? Visibility.Visible : Visibility.Collapsed;
-    public string LicenseText => LicenseMigration.KindText(Item.LicenseKind);
-
-    public string PriorityText => WishPriority.Text(Item.Priority);
-
-    public int Priority => WishPriority.Clean(Item.Priority);
-    public decimal PriceSort => Item.Price ?? decimal.MaxValue;
-    public DateTime Created => Item.CreatedUtc;
-
-    public string AccountText => Login.Account.Length > 0 ? Login.Account + (Login.FromPlatform ? "（厂家账号）" : "") : "未填";
-    public string PasswordMask => Login.Locked ? "无法解开" : Login.Password.Length > 0 ? "••••••••" : "未填";
-    public string PaidText => Money.Format(Item.PaidPrice, Item.Currency);
-    public decimal PaidSort => Item.PaidPrice ?? -1;
-    public string DateText => Item.PurchasedOn?.ToString("yyyy-MM-dd") ?? "";
-
-    public string SearchText => string.Join(' ', Item.Name, Item.Vendor, Item.Reason, Item.Note, Login.Account, Login.Platform, Item.ActivatedOn,
-        Item.LicenseKind == LicenseKind.Unknown ? "" : LicenseText).ToLowerInvariant();
+    public Visibility TargetVisibility => Row.ReachedTarget ? Visibility.Visible : Visibility.Collapsed;
+    public string LicenseText => Row.LicenseText;
+    public string PriorityText => Row.PriorityText;
+    public int Priority => Row.Priority;
+    public decimal PriceSort => Row.PriceSort;
+    public DateTime Created => Row.Created;
+    public string AccountText => Row.AccountText;
+    public string PasswordMask => Row.PasswordMask;
+    public string PaidText => Row.PaidText;
+    public decimal PaidSort => Row.PaidSort;
+    public string DateText => Row.DateText;
+    public string SearchText => Row.SearchText;
 
     public void Update(WishItem item, EffectiveLogin? login = null)
     {
-        Item = item;
-        Login = login ?? Login;
+        Row = Row with { Item = item, Login = login ?? Row.Login };
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
     }
 }

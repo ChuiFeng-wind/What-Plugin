@@ -70,14 +70,69 @@ public partial class MainWindow : Window, IScanHost
         RefreshHealth();
         RefreshProjects();
 
+        Transfer = new TransferActions(_database, new WindowDialogs(() => this))
+        {
+            Usage = () => ProjectReport.Usage,
+            Flush = FlushPages,
+        };
+        Transfer.StatusChanged += text => StatusText.Text = text;
+        Transfer.BackupImported += ReloadAfterImport;
+        Transfer.ReviewsImported += ReloadReviews;
+        Transfer.NotesImported += folder =>
+        {
+            Notes?.Reload(selectFolder: folder.Id);
+            RefreshCounts();
+        };
+        ExportButton.Click += async (_, _) => await Transfer.ExportAsync();
+        ImportButton.Click += async (_, _) => await Transfer.ImportAsync();
+
         Navigate("Plugins");
         Closing += (_, _) =>
         {
             _scanCancel?.Cancel();
             if (Projects is { IsScanning: true } projects)
                 projects.CancelScan();
-            Library(CurrentPage)?.SaveCurrent();
+            FlushPages();
+            SecureClipboard.ClearPending();
         };
+    }
+
+    /// <summary>左下角的导出、导入。</summary>
+    public TransferActions Transfer { get; }
+
+    /// <summary>把各页还在等待自动保存的内容写进数据库。</summary>
+    private void FlushPages()
+    {
+        Library(CurrentPage)?.SaveCurrent();
+        Notes?.Flush();
+        Wishes?.Flush();
+        Accounts?.Flush();
+    }
+
+    /// <summary>导入备份后所有页面重新读：设置、导航顺序和主题也可能变了。</summary>
+    private void ReloadAfterImport()
+    {
+        ThemeManager.Apply(_database.GetSetting(ThemeManager.Setting));
+        PublishLookupTheme();
+        ApplyNavOrder();
+        Library("Plugins")?.Load();
+        Library("Blacklist")?.Load();
+        ReloadReviews();
+        Notes?.Reload();
+        Wishes?.Reload();
+        Accounts?.Reload();
+        Settings?.Refresh();
+        RefreshCounts();
+        RefreshHealth();
+        RefreshProjects();
+    }
+
+    /// <summary>导入或移除了别人的评价。</summary>
+    private void ReloadReviews()
+    {
+        Library("Plugins")?.ReloadReviews();
+        Library("Blacklist")?.ReloadReviews();
+        Settings?.RefreshReviewSources();
     }
 
     /// <summary>状态栏上的文字（测试检查用）。</summary>
@@ -188,8 +243,8 @@ public partial class MainWindow : Window, IScanHost
     {
         if (CurrentPage == key)
             return;
-        // 离开插件库时把还在等待自动保存的内容写进去。
-        Library(CurrentPage)?.SaveCurrent();
+        // 离开插件库、混音笔记时把还在等待自动保存的内容写进去。
+        FlushPages();
         CurrentPage = key;
         _navItems[key].IsChecked = true;
         if (!_pages.TryGetValue(key, out var page))
@@ -202,6 +257,9 @@ public partial class MainWindow : Window, IScanHost
             other.IsVisible = other == page;
         // 插件库和垃圾桶各是一页，在一页里移入或恢复后，另一页显示时要重新读。
         Library(key)?.Load();
+        // 插件库里改了名、移进垃圾桶，或别处加了心愿单，回到笔记时重新读。
+        if (Notes is { } notesPage && key == "Chains")
+            notesPage.Reload();
         if (Settings is { } settings && key == SettingsPage.Key)
         {
             settings.Refresh();
@@ -218,6 +276,17 @@ public partial class MainWindow : Window, IScanHost
             StatusText.Text = projectPage.Status;
         if (Idle is { } idle && key == "Idle")
             StatusText.Text = idle.Summary;
+        // 两页共用同一批记录：在一页里标记已买、移回心愿单，或者笔记里加了心愿，另一页显示时要重新读。
+        if (Wishes is { } wishes && key == "Wishes")
+        {
+            wishes.Reload();
+            StatusText.Text = wishes.Status;
+        }
+        if (Accounts is { } accounts && key == "Accounts")
+        {
+            accounts.Reload();
+            StatusText.Text = accounts.Status;
+        }
     }
 
     public SettingsView? Settings => _pages.GetValueOrDefault(SettingsPage.Key) is PageFrame { Content: SettingsView view } ? view : null;
@@ -225,6 +294,12 @@ public partial class MainWindow : Window, IScanHost
     public HealthView? Health => _pages.GetValueOrDefault("Health") is PageFrame { Content: HealthView view } ? view : null;
 
     public ProjectsView? Projects => _pages.GetValueOrDefault("Projects") is PageFrame { Content: ProjectsView view } ? view : null;
+
+    public NotesView? Notes => _pages.GetValueOrDefault("Chains") is PageFrame { Content: NotesView view } ? view : null;
+
+    public WishesView? Wishes => _pages.GetValueOrDefault("Wishes") is PageFrame { Content: WishesView view } ? view : null;
+
+    public AccountsView? Accounts => _pages.GetValueOrDefault("Accounts") is PageFrame { Content: AccountsView view } ? view : null;
 
     public IdleView? Idle => _pages.GetValueOrDefault("Idle") is PageFrame { Content: IdleView view } ? view : null;
 
@@ -238,6 +313,11 @@ public partial class MainWindow : Window, IScanHost
         {
             var settings = new SettingsView(_database, _environment, this);
             settings.ThemeChosen += OnThemeChosen;
+            settings.ReviewsChanged += () =>
+            {
+                Library("Plugins")?.ReloadReviews();
+                Library("Blacklist")?.ReloadReviews();
+            };
             return new PageFrame(SettingsPage.Label, SettingsPage.Subtitle, settings);
         }
         var definition = Pages.First(p => p.Key == key);
@@ -281,6 +361,37 @@ public partial class MainWindow : Window, IScanHost
             };
             projects.ReportChanged += RefreshProjects;
             projects.Show(ProjectReport);
+            return frame;
+        }
+        if (key == "Chains")
+        {
+            var notes = new NotesView(_database);
+            var frame = new PageFrame(definition.Label, definition.Subtitle, notes, notes.Actions);
+            notes.StatusChanged += text => StatusText.Text = text;
+            notes.CountsChanged += RefreshCounts;
+            notes.OpenPlugin += ShowPlugin;
+            notes.SetUsage(ProjectReport.Usage);
+            return frame;
+        }
+        if (key == "Wishes")
+        {
+            var wishes = new WishesView(_database);
+            var frame = new PageFrame(definition.Label, definition.Subtitle, wishes);
+            wishes.SubtitleChanged += text => frame.Subtitle = text;
+            wishes.StatusChanged += text => StatusText.Text = text;
+            wishes.CountsChanged += RefreshCounts;
+            wishes.SetUsage(ProjectReport.Usage);
+            frame.Subtitle = WishListing.WishSubtitle(wishes.Rows.ToList());
+            return frame;
+        }
+        if (key == "Accounts")
+        {
+            var accounts = new AccountsView(_database);
+            var frame = new PageFrame(definition.Label, definition.Subtitle, accounts, accounts.Actions);
+            accounts.SubtitleChanged += text => frame.Subtitle = text;
+            accounts.StatusChanged += text => StatusText.Text = text;
+            accounts.CountsChanged += RefreshCounts;
+            frame.Subtitle = WishListing.AccountSubtitle(accounts.Rows.ToList());
             return frame;
         }
         if (key == "Idle")
@@ -332,6 +443,8 @@ public partial class MainWindow : Window, IScanHost
         _projectReport = ProjectListing.Load(_database);
         _navCounts["Projects"].Text = _projectReport.Projects.Count > 0 ? _projectReport.Projects.Count.ToString() : "";
         Projects?.Show(_projectReport);
+        Notes?.SetUsage(_projectReport.Usage);
+        Wishes?.SetUsage(_projectReport.Usage);
         if (Idle is { } idle)
             idle.Show(_projectReport);
         else

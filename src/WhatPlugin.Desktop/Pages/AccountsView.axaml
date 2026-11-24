@@ -1,0 +1,245 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:core="clr-namespace:WhatPlugin.Core;assembly=WhatPlugin.Core"
+             xmlns:local="clr-namespace:WhatPlugin.Desktop"
+             x:Class="WhatPlugin.Desktop.AccountsView">
+    <!-- 和 Windows 版一样：按插件看（可以多选批量填写），或按厂家账号看（同厂家的插件共用一个账号）。密码和序列号加密保存在本机。 -->
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,14,380" Margin="0,0,0,18">
+        <Grid Grid.ColumnSpan="3" ColumnDefinitions="Auto,*,150,110,Auto" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal" Margin="0,0,10,0">
+                <RadioButton x:Name="ModePurchases" Classes="Segment" GroupName="AccountView" Content="按插件" IsChecked="True" MinWidth="76" Margin="0,0,6,0"/>
+                <RadioButton x:Name="ModePlatforms" Classes="Segment" GroupName="AccountView" Content="厂家账号" MinWidth="76" AutomationProperties.Name="厂家账号"/>
+            </StackPanel>
+            <TextBox x:Name="SearchBox" Grid.Column="1" PlaceholderText="搜索插件名、厂家或账号" AutomationProperties.Name="搜索已购账号"/>
+            <ComboBox x:Name="VendorFilter" Grid.Column="2" Margin="8,0,0,0" HorizontalAlignment="Stretch" AutomationProperties.Name="按厂家筛选"/>
+            <ComboBox x:Name="StateFilter" Grid.Column="3" Margin="8,0,0,0" HorizontalAlignment="Stretch" AutomationProperties.Name="按账号状态筛选"/>
+            <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="8,0,0,0">
+                <Button x:Name="SelectAllButton" Classes="Ghost" Content="全选" ToolTip.Tip="选中列表里的全部，一起填账号或删除"/>
+                <Button x:Name="ILokFillButton" Classes="Ghost" IsVisible="False" AutomationProperties.Name="填入 iLok 账号"
+                        ToolTip.Tip="把最上面“iLok”里的账号填到用 iLok 激活的厂家">
+                    <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="KeyChainVariant" Width="15" Height="15" Margin="0,0,6,0"/><TextBlock Text="填入 iLok 账号"/></StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- 左：列表 -->
+        <Border Grid.Row="1" Classes="Card" ClipToBounds="True">
+            <Panel>
+                <DockPanel x:Name="PurchaseView">
+                    <Border DockPanel.Dock="Top" Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Line}">
+                        <Grid ColumnDefinitions="2*,2*,80,80,80,92">
+                            <TextBlock Text="插件" Classes="ColumnHeader" Margin="14,0,8,0" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="1" Text="账号" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="2" Text="密码" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="3" Text="授权" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="4" Text="实付" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="5" Text="购买日期" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                        </Grid>
+                    </Border>
+                    <Panel>
+                        <ListBox x:Name="PurchaseList" Classes="Plugins" SelectionMode="Multiple" AutomationProperties.Name="已购插件">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="core:WishRow">
+                                    <Grid ColumnDefinitions="2*,2*,80,80,80,92" Height="50" Background="Transparent">
+                                        <StackPanel VerticalAlignment="Center" Margin="14,0,8,0">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding VendorText}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding AccountText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding PasswordMask}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding LicenseText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="4" Text="{Binding PaidText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="5" Text="{Binding DateText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <StackPanel x:Name="PurchaseEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False">
+                            <mi:MaterialIcon Kind="KeyOutline" Width="36" Height="36" Foreground="{DynamicResource LineStrong}"/>
+                            <TextBlock x:Name="PurchaseEmptyText" Foreground="{DynamicResource Muted}" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Panel>
+                </DockPanel>
+
+                <DockPanel x:Name="PlatformView" IsVisible="False">
+                    <Border DockPanel.Dock="Top" Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Line}">
+                        <Grid ColumnDefinitions="2*,2*,80,80">
+                            <TextBlock Text="厂家账号" Classes="ColumnHeader" Margin="14,0,8,0" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="1" Text="账号" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="2" Text="密码" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="3" Text="共用插件" Classes="ColumnHeader" HorizontalAlignment="Left"/>
+                        </Grid>
+                    </Border>
+                    <Panel>
+                        <ListBox x:Name="PlatformList" Classes="Plugins" AutomationProperties.Name="厂家账号">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="core:PlatformEntry">
+                                    <Grid ColumnDefinitions="2*,2*,80,80" Height="50" Background="Transparent">
+                                        <StackPanel VerticalAlignment="Center" Margin="14,0,8,0">
+                                            <TextBlock Text="{Binding Platform}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding VendorsText}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding AccountText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding PasswordMask}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding CountText}" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <StackPanel x:Name="PlatformEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False">
+                            <mi:MaterialIcon Kind="AccountKeyOutline" Width="36" Height="36" Foreground="{DynamicResource LineStrong}"/>
+                            <TextBlock x:Name="PlatformEmptyText" Foreground="{DynamicResource Muted}" Margin="0,10,0,0" HorizontalAlignment="Center" TextAlignment="Center"/>
+                        </StackPanel>
+                    </Panel>
+                </DockPanel>
+            </Panel>
+        </Border>
+
+        <!-- 右：详情 -->
+        <Border Grid.Row="1" Grid.Column="2" Classes="Card" ClipToBounds="True">
+            <Panel>
+                <StackPanel x:Name="DetailEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="300">
+                    <mi:MaterialIcon Kind="KeyOutline" Width="34" Height="34" Foreground="{DynamicResource LineStrong}"/>
+                    <TextBlock x:Name="DetailEmptyText" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap" TextAlignment="Center"/>
+                </StackPanel>
+
+                <!-- 一款插件 -->
+                <ScrollViewer x:Name="PurchasePanel" VerticalScrollBarVisibility="Auto" IsVisible="False">
+                    <StackPanel Margin="20,18,18,20">
+                        <WrapPanel HorizontalAlignment="Right">
+                            <Button x:Name="BackButton" Classes="Ghost" Margin="0,0,4,0" AutomationProperties.Name="移回心愿单">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="HeartOutline" Width="15" Height="15" Margin="0,0,6,0"/><TextBlock Text="移回心愿单"/></StackPanel>
+                            </Button>
+                            <Button x:Name="DeleteButton" Classes="Ghost" AutomationProperties.Name="删除">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="DeleteOutline" Width="15" Height="15" Margin="0,0,6,0" Foreground="{DynamicResource Danger}"/><TextBlock Text="删除" Foreground="{DynamicResource Danger}"/></StackPanel>
+                            </Button>
+                        </WrapPanel>
+                        <TextBlock Text="插件名" Classes="FieldLabel" Margin="0,10,0,4"/>
+                        <TextBox x:Name="NameBox" AutomationProperties.Name="插件名"/>
+                        <TextBlock Text="厂家" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <TextBox x:Name="VendorBox" AutomationProperties.Name="厂家"/>
+
+                        <TextBlock Text="登录" Classes="FieldLabel" Margin="0,14,0,4"/>
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="LoginFollow" Classes="Segment" GroupName="LoginMode" Content="用厂家账号" MinWidth="96" Margin="0,0,6,0"/>
+                            <RadioButton x:Name="LoginOwn" Classes="Segment" GroupName="LoginMode" Content="单独账号" MinWidth="96"/>
+                        </StackPanel>
+                        <TextBlock x:Name="LoginHint" Classes="SmallNote" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <TextBlock Text="账号" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <TextBox x:Name="AccountBox" AutomationProperties.Name="账号"/>
+                            <Button x:Name="CopyAccountButton" Grid.Column="1" Classes="Ghost" Padding="7,6" Margin="4,0,0,0" ToolTip.Tip="复制，30 秒后自动清除" AutomationProperties.Name="复制账号">
+                                <mi:MaterialIcon Kind="ContentCopy" Width="16" Height="16"/>
+                            </Button>
+                            <Button x:Name="PickAccountButton" Grid.Column="2" Classes="Ghost" Padding="7,6" ToolTip.Tip="选一个填过的账号" AutomationProperties.Name="选一个填过的账号">
+                                <mi:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                            </Button>
+                        </Grid>
+                        <TextBlock Text="密码" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <local:SecretBox x:Name="PasswordBox" Label="密码"/>
+                        <TextBlock Text="序列号" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <local:SecretBox x:Name="SerialBox" Label="序列号"/>
+                        <TextBlock x:Name="PurchaseLocked" Classes="SmallNote" Foreground="{DynamicResource Danger}" Margin="0,8,0,0" IsVisible="False" TextWrapping="Wrap"/>
+
+                        <Grid ColumnDefinitions="*,10,*" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="授权方式" Classes="FieldLabel" Margin="0,0,0,4"/>
+                                <ComboBox x:Name="LicenseBox" HorizontalAlignment="Stretch" AutomationProperties.Name="授权方式"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="剩余激活次数" Classes="FieldLabel" Margin="0,0,0,4"/>
+                                <TextBox x:Name="ActivationsBox" AutomationProperties.Name="剩余激活次数"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="激活在" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="ActivatedOnBox" PlaceholderText="机器名或 U 盘，多个用逗号分隔" AutomationProperties.Name="激活在"/>
+                            <Button x:Name="ThisMachineButton" Grid.Column="1" Classes="Ghost" Content="本机" Margin="4,0,0,0" ToolTip.Tip="把这台电脑加进去"/>
+                        </Grid>
+                        <TextBlock Text="发票号或订单号" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <TextBox x:Name="InvoiceBox" PlaceholderText="选填。不加密保存，不要填密码" AutomationProperties.Name="发票号或订单号"/>
+                        <Grid ColumnDefinitions="72,*,10,*" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="币种" Classes="FieldLabel" Margin="0,0,0,4"/>
+                                <ComboBox x:Name="CurrencyBox" HorizontalAlignment="Stretch" AutomationProperties.Name="币种"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="6,0,0,0">
+                                <TextBlock Text="实付" Classes="FieldLabel" Margin="0,0,0,4"/>
+                                <TextBox x:Name="PaidBox" AutomationProperties.Name="实付"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3">
+                                <TextBlock Text="购买日期" Classes="FieldLabel" Margin="0,0,0,4"/>
+                                <TextBox x:Name="DateBox" PlaceholderText="2026-11-06" AutomationProperties.Name="购买日期"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="当初为什么买" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <TextBox x:Name="ReasonBox" Classes="Multiline" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="52" AutomationProperties.Name="当初为什么买"/>
+                        <TextBlock Text="备注" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <TextBox x:Name="NoteBox" Classes="Multiline" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="52"
+                                 PlaceholderText="iLok 账号、激活台数…" AutomationProperties.Name="备注"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- 多选 -->
+                <ScrollViewer x:Name="BatchPanel" VerticalScrollBarVisibility="Auto" IsVisible="False">
+                    <StackPanel Margin="20,18,18,20">
+                        <TextBlock x:Name="BatchTitle" FontSize="19" FontWeight="SemiBold"/>
+                        <TextBlock Classes="SmallNote" TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Text="给选中的插件填同样的内容。留空的项不会改动。账号密码会存成各自的厂家账号，同厂家的插件共用；序列号每款单独保存。"/>
+                        <TextBlock Text="账号" Classes="FieldLabel" Margin="0,14,0,4"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="BatchAccount" AutomationProperties.Name="批量填写的账号"/>
+                            <Button x:Name="BatchPickAccountButton" Grid.Column="1" Classes="Ghost" Padding="7,6" Margin="4,0,0,0" ToolTip.Tip="选一个填过的账号" AutomationProperties.Name="选一个填过的账号">
+                                <mi:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                            </Button>
+                        </Grid>
+                        <TextBlock Text="密码" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <local:SecretBox x:Name="BatchPassword" Label="批量填写的密码" ShowCopy="False"/>
+                        <TextBlock Text="序列号" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <local:SecretBox x:Name="BatchSerial" Label="批量填写的序列号" ShowCopy="False"/>
+                        <TextBlock Text="授权方式" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <ComboBox x:Name="BatchLicense" HorizontalAlignment="Stretch" AutomationProperties.Name="批量填写的授权方式"/>
+                        <TextBlock Text="激活在" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <TextBox x:Name="BatchActivatedOn" PlaceholderText="机器名或 U 盘" AutomationProperties.Name="批量填写的激活在"/>
+                        <Button x:Name="BatchApplyButton" Classes="Primary" Content="保存到选中的插件" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,18,0,0"/>
+                        <Button x:Name="BatchDeleteButton" Classes="Ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,8,0,0" AutomationProperties.Name="删除选中的插件">
+                            <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="DeleteOutline" Width="15" Height="15" Margin="0,0,6,0" Foreground="{DynamicResource Danger}"/><TextBlock Text="删除选中的插件" Foreground="{DynamicResource Danger}"/></StackPanel>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- 厂家账号 -->
+                <ScrollViewer x:Name="PlatformPanel" VerticalScrollBarVisibility="Auto" IsVisible="False">
+                    <StackPanel Margin="20,18,18,20">
+                        <WrapPanel HorizontalAlignment="Right">
+                            <Button x:Name="PlatformDeleteButton" Classes="Ghost" AutomationProperties.Name="清空这个厂家账号">
+                                <StackPanel Orientation="Horizontal"><mi:MaterialIcon Kind="DeleteOutline" Width="15" Height="15" Margin="0,0,6,0" Foreground="{DynamicResource Danger}"/><TextBlock Text="清空这个厂家账号" Foreground="{DynamicResource Danger}"/></StackPanel>
+                            </Button>
+                        </WrapPanel>
+                        <TextBlock x:Name="PlatformTitle" FontSize="19" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="PlatformSubtitle" Classes="SmallNote" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <TextBlock Text="账号" Classes="FieldLabel" Margin="0,14,0,4"/>
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <TextBox x:Name="PlatformAccountBox" AutomationProperties.Name="厂家账号的账号"/>
+                            <Button x:Name="CopyPlatformAccountButton" Grid.Column="1" Classes="Ghost" Padding="7,6" Margin="4,0,0,0" ToolTip.Tip="复制，30 秒后自动清除" AutomationProperties.Name="复制账号">
+                                <mi:MaterialIcon Kind="ContentCopy" Width="16" Height="16"/>
+                            </Button>
+                            <Button x:Name="PlatformPickAccountButton" Grid.Column="2" Classes="Ghost" Padding="7,6" ToolTip.Tip="选一个填过的账号" AutomationProperties.Name="选一个填过的账号">
+                                <mi:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                            </Button>
+                        </Grid>
+                        <TextBlock Text="密码" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <local:SecretBox x:Name="PlatformPassword" Label="厂家账号的密码"/>
+                        <TextBlock x:Name="PlatformLocked" Classes="SmallNote" Foreground="{DynamicResource Danger}" Margin="0,8,0,0" IsVisible="False" TextWrapping="Wrap"/>
+                        <TextBlock Text="备注" Classes="FieldLabel" Margin="0,12,0,4"/>
+                        <TextBox x:Name="PlatformNote" Classes="Multiline" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="52"
+                                 PlaceholderText="注册邮箱、iLok 账号…" AutomationProperties.Name="厂家账号的备注"/>
+                        <TextBlock Text="共用这个账号的插件" Classes="FieldLabel" Margin="0,14,0,4"/>
+                        <TextBlock x:Name="PlatformProducts" TextWrapping="Wrap" Foreground="{DynamicResource TextDim}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Panel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -40,6 +40,11 @@ public partial class PluginLibraryView : UserControl
     private bool _loadingDetail;
     private bool _suppressFilter;
     private bool _suppressSelection;
+    private ReviewLibrary? _reviewLibrary;
+    private Dictionary<string, ReviewAdoption>? _adoptions;
+    private IReadOnlyList<AttributedReview> _currentShared = [];
+    private long? _sharedSourceId;
+    private bool _loadingShared;
 
     public bool Blacklist { get; }
 
@@ -59,6 +64,7 @@ public partial class PluginLibraryView : UserControl
     {
         _database = database;
         Blacklist = blacklist;
+        Dialogs = new WindowDialogs(() => TopLevel.GetTopLevel(this) as Window);
         InitializeComponent();
 
         RecommendBar.IsVisible = !blacklist;
@@ -92,9 +98,15 @@ public partial class PluginLibraryView : UserControl
         NewTagBox.AddHandler(KeyDownEvent, NewTagBox_KeyDown, RoutingStrategies.Tunnel);
         ResetButton.Click += (_, _) => ResetOverrides();
         BlacklistButton.Click += (_, _) => ToggleBlacklist();
+        SharedAuthorPicker.SelectionChanged += (_, _) => SharedAuthorChanged();
+        AdoptReviewButton.Click += async (_, _) => await AdoptReviewAsync();
+        CompareReviewsButton.Click += async (_, _) => await CompareReviewsAsync();
 
         UpdateColumns(0);
     }
+
+    /// <summary>问用户的对话框；测试换成按脚本回答的实现。</summary>
+    public IDialogs Dialogs { get; set; }
 
     /// <summary>当前列表里显示的插件（测试检查用）。</summary>
     public IReadOnlyList<PluginItem> Shown => PluginList.ItemsSource as IReadOnlyList<PluginItem> ?? [];
@@ -435,6 +447,126 @@ public partial class PluginLibraryView : UserControl
         UpdateStars();
         RebuildChips();
         RebuildTimbreChips();
+        ShowSharedReviews(row);
+    }
+
+    // ---------- 别人分享的评价 ----------
+
+    private ReviewLibrary Reviews => _reviewLibrary ??= new ReviewLibrary(_database.LoadSharedReviews());
+
+    private Dictionary<string, ReviewAdoption> Adoptions => _adoptions ??= _database.LoadReviewAdoptions();
+
+    /// <summary>详情里正在看的那条别人的评价。</summary>
+    public AttributedReview? SelectedShared =>
+        _currentShared.FirstOrDefault(r => r.Source.Id == _sharedSourceId) ?? _currentShared.FirstOrDefault();
+
+    /// <summary>这款插件的所有分享评价（测试检查用）。</summary>
+    public IReadOnlyList<AttributedReview> SharedReviews => _currentShared;
+
+    public bool SharedCardVisible => SharedReviewCard.IsVisible;
+
+    public string SharedAuthorText => SharedAuthor.Text ?? "";
+
+    public string AdoptionLabel => AdoptionBadge.IsVisible ? AdoptionText.Text ?? "" : "";
+
+    public bool CanAdopt => AdoptReviewButton.IsEnabled;
+
+    /// <summary>导入、移除别人的评价后重新读。</summary>
+    public void ReloadReviews()
+    {
+        _reviewLibrary = null;
+        _adoptions = null;
+        if (_current != null)
+            ShowSharedReviews(_current.Row);
+    }
+
+    private void ShowSharedReviews(PluginRow row)
+    {
+        UpdateAdoptionBadge(row);
+        _currentShared = Reviews.For(row);
+        SharedReviewCard.IsVisible = _currentShared.Count > 0;
+        if (_currentShared.Count == 0)
+            return;
+
+        // 切换插件时尽量继续看同一个人的评价。
+        var selected = SelectedShared!;
+        _loadingShared = true;
+        SharedAuthorPicker.ItemsSource = _currentShared.Select(r => ReviewListing.AuthorLabel(r.Source, _currentShared.Select(c => c.Source))).ToList();
+        SharedAuthorPicker.SelectedIndex = _currentShared.ToList().IndexOf(selected);
+        SharedAuthorPicker.IsVisible = _currentShared.Count > 1;
+        _loadingShared = false;
+        ShowSharedReview(row, selected);
+    }
+
+    private void ShowSharedReview(PluginRow row, AttributedReview shared)
+    {
+        var review = shared.Review;
+        SharedAuthor.Text = $"来自 {shared.Source.Name} 的评价";
+        SharedStars.Text = ReviewListing.Stars(review.Rating);
+        SharedNote.Text = review.Note;
+        SharedNoteHost.IsVisible = review.Note.Length > 0;
+        SharedTags.Text = ReviewListing.TagsLine(review);
+        SharedTags.IsVisible = review.Tags.Count > 0;
+        var extras = ReviewListing.Extras(review);
+        SharedExtras.Text = extras;
+        SharedExtras.IsVisible = extras.Length > 0;
+        var same = ReviewListing.SameAsOwn(row.User, review);
+        AdoptReviewButton.IsEnabled = !same;
+        AdoptReviewButton.Content = ReviewListing.AdoptText(same);
+    }
+
+    private void UpdateAdoptionBadge(PluginRow row)
+    {
+        var text = Adoptions.TryGetValue(row.Key, out var adoption) ? adoption.Describe(row.User) : "";
+        AdoptionText.Text = text;
+        ToolTip.SetTip(AdoptionBadge, text.Length > 0 ? text + "。" + ReviewListing.IdentityNote : null);
+        AdoptionBadge.IsVisible = text.Length > 0;
+    }
+
+    /// <summary>选看哪一位的评价（测试用）。</summary>
+    public void ShowSharedFrom(int index) => SharedAuthorPicker.SelectedIndex = index;
+
+    private void SharedAuthorChanged()
+    {
+        if (_loadingShared || _current == null || SharedAuthorPicker.SelectedIndex < 0 || SharedAuthorPicker.SelectedIndex >= _currentShared.Count)
+            return;
+        var shared = _currentShared[SharedAuthorPicker.SelectedIndex];
+        _sharedSourceId = shared.Source.Id;
+        ShowSharedReview(_current.Row, shared);
+    }
+
+    /// <summary>把正在看的那条评价复制到自己的评分、感受和标签。已有自己的评价时先问。</summary>
+    public async Task AdoptReviewAsync()
+    {
+        SaveCurrent(force: true);
+        if (_current == null || SelectedShared is not { } shared)
+            return;
+        var item = _current;
+        var row = item.Row;
+        if (ReviewShare.HasReview(row) && !await Dialogs.Confirm("替换自己的评价？", ReviewListing.ReplacePrompt(row, shared.Source), "替换"))
+            return;
+        try
+        {
+            var (data, adoption) = _database.AdoptReview(row, shared.Review, shared.Source.Name);
+            Adoptions[row.Key] = adoption;
+            item.Update(row with { User = data });
+        }
+        catch (SqliteException error)
+        {
+            Status("采用失败：" + error.Message);
+            return;
+        }
+        if (_current == item)
+            ShowDetail();
+        RebuildFilterOptions();
+        Status(ReviewListing.Adopted(shared.Source, row));
+    }
+
+    public async Task CompareReviewsAsync()
+    {
+        SaveCurrent(force: true);
+        if (_current != null && _currentShared.Count > 0)
+            await Dialogs.CompareReviews(_current.Row, _currentShared);
     }
 
     private void ShowDerivedDetail(PluginRow row)

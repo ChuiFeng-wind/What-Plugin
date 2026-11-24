@@ -38,6 +38,16 @@ public interface IScanHost
 }
 
 /// <summary>设置页：主题、使用统计和插件扫描。扫描不会打开插件界面，也不会改动插件文件。</summary>
+/// <summary>设置页里一位分享者的评价。用普通类：列表每次重建，内容相同的记录不该被当成同一项。</summary>
+public sealed class ReviewSourceRow(ReviewSource source, string name, string detail)
+{
+    public ReviewSource Source { get; } = source;
+    public string Name { get; } = name;
+    public string Detail { get; } = detail;
+
+    public override string ToString() => Name;
+}
+
 public partial class SettingsView : UserControl
 {
     private readonly PluginDatabase _database;
@@ -47,6 +57,9 @@ public partial class SettingsView : UserControl
 
     /// <summary>用户点了某个主题（参数是主题标识）。保存由主窗口负责。</summary>
     public event Action<string>? ThemeChosen;
+
+    /// <summary>移除了别人的评价，插件详情要重新读。</summary>
+    public event Action? ReviewsChanged;
 
     /// <summary>弹确认框。测试换成直接返回结果的函数。</summary>
     public Func<string, string, string, Task<bool>> Confirm { get; set; }
@@ -67,6 +80,8 @@ public partial class SettingsView : UserControl
 
         ThemeList.ItemsSource = ThemePalettes.All.Select(p => new ThemeOption(p, p.Id == ThemeManager.Current.Id)).ToList();
         MainFoldersNote.Text = ScanSettings.MainFoldersNote;
+        ReviewSourcesNote.Text = ReviewListing.SourcesNote;
+        ReviewSourcesEmpty.Text = ReviewListing.NoSources;
 
         ScanButton.Click += (_, _) => Scan(new ScanRequest(Full: false, ScanFormats.Main));
         FullScanButton.Click += (_, _) => Scan(new ScanRequest(Full: true, ScanFormats.Main));
@@ -89,7 +104,38 @@ public partial class SettingsView : UserControl
         Vst2Summary.Text = info.Vst2Summary;
         Vst2HostNote.Text = info.Vst2HostNote;
         ShowUsage();
+        RefreshReviewSources();
         SetScanning(_host.IsScanning);
+    }
+
+    // ---------- 别人分享的评价 ----------
+
+    public IReadOnlyList<ReviewSourceRow> ReviewSources => ReviewSourceList.ItemsSource as IReadOnlyList<ReviewSourceRow> ?? [];
+
+    public void RefreshReviewSources()
+    {
+        var rows = _database.LoadEffects();
+        var sources = _database.LoadReviewSources();
+        var library = new ReviewLibrary(_database.LoadSharedReviews());
+        ReviewSourceList.ItemsSource = sources.Select(s => new ReviewSourceRow(
+            s, ReviewListing.AuthorLabel(s, sources), ReviewListing.SourceDetail(s, library.CountMatched(s, rows)))).ToList();
+        ReviewSourcesEmpty.IsVisible = sources.Count == 0;
+    }
+
+    private async void RemoveReviewSource_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is ReviewSourceRow row)
+            await RemoveReviewSource(row);
+    }
+
+    public async Task RemoveReviewSource(ReviewSourceRow row)
+    {
+        if (!await Confirm("移除这份评价？", ReviewListing.RemovePrompt(row.Source), "移除"))
+            return;
+        _database.RemoveReviewSource(row.Source.Id);
+        RefreshReviewSources();
+        ReviewsChanged?.Invoke();
+        _host.ShowStatus(ReviewListing.Removed(row.Source));
     }
 
     public void SetScanning(bool scanning)
