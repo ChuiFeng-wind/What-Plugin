@@ -21,7 +21,7 @@ VSTGUI 内置的组件
   stb_textedit (Public Domain / MIT 二选一，此处按 Public Domain 使用)
     Sean Barrett
 
-.NET Runtime 和 Windows Desktop Runtime (MIT)
+.NET Runtime 和 Windows Desktop Runtime (MIT，Mac 版附带 dotnet.txt 和 dotnet-notices.txt)
   Copyright (c) .NET Foundation and Contributors
 
 Microsoft.Data.Sqlite、System.Security.Cryptography.ProtectedData (MIT)
@@ -32,3 +32,28 @@ SQLitePCLRaw (Apache-2.0，文本见 Apache-2.0.txt)
 
 SQLite
   Public domain. https://www.sqlite.org/copyright.html
+
+---------- 以下只用于 Mac 版（跨平台界面 WhatPlugin.app） ----------
+
+Avalonia (MIT，文本见 MIT.txt)
+  Copyright 2013-2026 © The AvaloniaUI Project
+  包括 Avalonia.Desktop、Avalonia.Native、Avalonia.Skia、Avalonia.HarfBuzz、Avalonia.Themes.Fluent 等组件。
+
+MicroCom.Runtime (MIT，文本见 MIT.txt)
+  Copyright 2021 © Nikita Tsukanov
+
+Tmds.DBus.Protocol (MIT，文本见 MIT.txt)
+  Copyright Tom Deseyn
+  Avalonia 在 Linux 上用到，随 Avalonia.Desktop 一起带上，Mac 上不会加载。
+
+SkiaSharp (MIT，文本见 SkiaSharp.txt)
+  © Microsoft Corporation
+  它内置的 Skia 等组件的授权见 SkiaSharp-third-party.txt。
+
+HarfBuzzSharp (MIT，文本见 HarfBuzzSharp.txt)
+  © Microsoft Corporation
+  它内置的 HarfBuzz 等组件的授权见 HarfBuzzSharp-third-party.txt。
+
+Material.Icons、Material.Icons.Avalonia (MIT，文本见 MIT.txt)
+  Copyright SKProCH, https://github.com/SKProCH/Material.Icons
+  图标来自 Pictogrammers 的 Material Design Icons，按其授权使用：https://pictogrammers.com/docs/general/license/

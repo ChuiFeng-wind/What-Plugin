@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- WhatPlugin.app 的说明文件。__VERSION__ 由 package.sh 换成 WhatPlugin.Desktop.csproj 里的版本号。 -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>WhatPlugin</string>
+    <key>CFBundleDisplayName</key>
+    <string>WhatPlugin</string>
+    <key>CFBundleIdentifier</key>
+    <string>app.whatplugin.WhatPlugin</string>
+    <key>CFBundleExecutable</key>
+    <string>WhatPlugin.Desktop</string>
+    <key>CFBundleIconFile</key>
+    <string>WhatPlugin.icns</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION__</string>
+    <key>CFBundleVersion</key>
+    <string>__VERSION__</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh_CN</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.music</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>GPL-3.0。第三方软件的授权见 Contents/Resources/licenses。</string>
+</dict>
+</plist>

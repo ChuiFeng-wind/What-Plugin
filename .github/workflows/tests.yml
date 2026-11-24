@@ -129,6 +129,56 @@ jobs:
           # 数据库只写在指定的位置，没有碰默认位置。
           test ! -e "$HOME/Library/Application Support/WhatPlugin/plugins.db"
 
+      # 跨平台界面打成 WhatPlugin.app 装进 .dmg（Apple 芯片和 Intel 各一份），临时签名。
+      - name: 打包 WhatPlugin.app 和 .dmg
+        run: |
+          for rid in osx-arm64 osx-x64; do
+            VST3_SDK="$SDK" bash installer/mac/package.sh $rid "$WORK/dmg"
+          done
+          ls -l "$WORK/dmg"
+
+      - name: 检查 .dmg 并试着打开应用
+        run: |
+          for arch in arm64 x64; do
+            dmg=$(ls "$WORK"/dmg/WhatPlugin-*-mac-$arch.dmg)
+            mnt="$WORK/mnt-$arch"
+            mkdir -p "$mnt"
+            hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mnt" >/dev/null
+            app="$mnt/WhatPlugin.app"
+            test -f "$mnt/打开说明.txt"
+            test -L "$mnt/Applications"
+            test "$(plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")" = WhatPlugin.Desktop
+            test -f "$app/Contents/Resources/WhatPlugin.icns"
+            test -f "$app/Contents/Resources/licenses/THIRD-PARTY-NOTICES.txt"
+            test -f "$app/Contents/Resources/licenses/SkiaSharp-third-party.txt"
+            test -f "$app/Contents/Resources/licenses/dotnet.txt"
+            codesign --verify --deep --strict "$app"
+            want=$([ $arch = arm64 ] && echo arm64 || echo x86_64)
+            file "$app/Contents/MacOS/WhatPlugin.Desktop" | grep -q "$want"
+            # 扫描器是通用二进制，两份里都是同一个。
+            lipo -archs "$app/Contents/MacOS/WhatPluginScanner" | grep -q arm64
+            if [ $arch = arm64 ]; then
+              # 用临时数据库打开 20 秒：没有闪退、数据库建好了、默认位置没被碰。
+              "$app/Contents/MacOS/WhatPlugin.Desktop" --db "$WORK/app-smoke.db" > "$WORK/app.log" 2>&1 &
+              pid=$!
+              sleep 20
+              if ! kill -0 $pid 2>/dev/null; then
+                echo "应用启动后退出了："; cat "$WORK/app.log"; exit 1
+              fi
+              kill $pid; wait $pid 2>/dev/null || true
+              test -s "$WORK/app-smoke.db"
+              test ! -e "$HOME/Library/Application Support/WhatPlugin/plugins.db"
+            fi
+            hdiutil detach "$mnt" >/dev/null
+          done
+          cp "$WORK"/dmg/*.dmg "$GITHUB_WORKSPACE/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WhatPlugin-mac-dmg
+          path: WhatPlugin-*-mac-*.dmg
+          retention-days: 14
+          compression-level: 0
+
       # 测试都通过后，把 Apple 芯片的命令行工具和扫描器打成一个包，给离线的 Mac 拷过去用。
       # 用 tar.gz：zip 会丢掉程序的可执行权限。
       - name: 打包 Apple 芯片版
