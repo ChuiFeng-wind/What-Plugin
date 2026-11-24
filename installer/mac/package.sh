@@ -25,7 +25,7 @@ trap 'rm -rf "$work"' EXIT
 app="$work/dmg/WhatPlugin.app"
 mkdir -p "$out" "$app/Contents/MacOS" "$app/Contents/Resources"
 
-echo "== 发布 $rid（版本 $version）"
+echo "== 发布 ${rid}（版本 ${version}）"
 dotnet publish "$root/src/WhatPlugin.Desktop" -c Release -r "$rid" --self-contained true -o "$work/publish" -nologo
 test -x "$work/publish/WhatPlugin.Desktop"
 test -x "$work/publish/WhatPluginScanner" || { echo "发布结果里没有扫描器，先编译 scanner" >&2; exit 1; }

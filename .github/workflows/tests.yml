@@ -133,9 +133,11 @@ jobs:
       - name: 打包 WhatPlugin.app 和 .dmg
         run: |
           for rid in osx-arm64 osx-x64; do
-            VST3_SDK="$SDK" bash installer/mac/package.sh $rid "$WORK/dmg"
+            VST3_SDK="$SDK" bash installer/mac/package.sh $rid "$WORK/dmg" || exit 1
           done
           ls -l "$WORK/dmg"
+          test -f "$(ls "$WORK"/dmg/WhatPlugin-*-mac-arm64.dmg)"
+          test -f "$(ls "$WORK"/dmg/WhatPlugin-*-mac-x64.dmg)"
 
       - name: 检查 .dmg 并试着打开应用
         run: |
