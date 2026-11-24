@@ -13,7 +13,11 @@ namespace lookup
 {
 namespace
 {
+#if defined(__APPLE__)
+const char* const uiFont = "PingFang SC";
+#else
 const char* const uiFont = "Microsoft YaHei UI";
+#endif
 
 CColor hex (const Json& theme, const char* key, uint32_t fallback)
 {

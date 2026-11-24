@@ -29,18 +29,19 @@ public:
     void stop();
 
 private:
-    void run (std::wstring commandLine, unsigned generation);
+    void run (std::vector<std::string> argv, unsigned generation);
 
     std::thread worker;
     std::atomic<bool> cancel { false };
     std::atomic<unsigned> currentGeneration { 0 };
     std::mutex lock;
     std::optional<std::string> result;
-    void* process = nullptr; // HANDLE，受 lock 保护
+    void* process = nullptr; // Windows：进程句柄，受 lock 保护
+    int pid = -1;            // Mac：进程号，受 lock 保护
 };
 
-/// 命令行工具的位置：环境变量 WHATPLUGIN_LOOKUP_CLI（测试用），否则读主程序写下的
-/// %LOCALAPPDATA%\WhatPlugin\cli-path.txt。找不到时返回空。
+/// 命令行工具的位置：环境变量 WHATPLUGIN_LOOKUP_CLI（测试用），否则读主程序写下的 cli-path.txt
+/// （Windows 在 %LOCALAPPDATA%\WhatPlugin，Mac 在 ~/Library/Application Support/WhatPlugin）。找不到时返回空。
 std::string findCli();
 
 /// 测试用：环境变量 WHATPLUGIN_LOOKUP_DB 指定数据库。

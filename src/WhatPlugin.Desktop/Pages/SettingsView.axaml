@@ -171,6 +171,23 @@
                     <ItemsControl x:Name="Vst2FolderList" ItemTemplate="{StaticResource FolderTemplate}" AutomationProperties.Name="VST2 文件夹"/>
                 </StackPanel>
             </Border>
+
+            <!-- Mac 版：把应用里带的查询插件装到当前用户的 VST3 文件夹。Windows 由安装程序装，这张卡片不显示。 -->
+            <Border x:Name="LookupCard" Classes="Card" Padding="20,18" Margin="0,12,0,0" IsVisible="False">
+                <StackPanel>
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button x:Name="RevealLookupButton" Content="在访达中显示" Classes="Ghost" Margin="0,0,6,0"/>
+                            <Button x:Name="InstallLookupButton" Classes="Primary"/>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="DAW 内查询窗口" Classes="SectionTitle"/>
+                            <TextBlock Text="VST3 插件 WhatPluginLookup：在 DAW 里打开它，就能查自己的插件和推荐，不用切出来。它不处理声音。" Classes="SmallNote" Margin="0,3,12,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <TextBlock x:Name="LookupState" Classes="SmallNote" Margin="0,12,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

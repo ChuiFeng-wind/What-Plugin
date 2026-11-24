@@ -129,6 +129,24 @@ jobs:
           # 数据库只写在指定的位置，没有碰默认位置。
           test ! -e "$HOME/Library/Application Support/WhatPlugin/plugins.db"
 
+      # DAW 内查询插件：通用二进制，编完由 SDK 的 validator 检查；Runner 测试真的运行命令行工具。
+      - name: 编译并检查查询插件
+        run: |
+          cmake -S plugin -B build/plugin -G Xcode -Dvst3sdk_SOURCE_DIR="$SDK" -DWHATPLUGIN_BUILD_RUNNER_TEST=ON
+          cmake --build build/plugin --config Release --target WhatPluginLookup RunnerTest --parallel -- -quiet
+          vst3=build/plugin/VST3/Release/WhatPluginLookup.vst3
+          bin="$vst3/Contents/MacOS/WhatPluginLookup"
+          lipo -archs "$bin"
+          lipo -archs "$bin" | grep -q arm64
+          lipo -archs "$bin" | grep -q x86_64
+          validator=$(find build/plugin -name validator -type f -perm -u+x | head -1)
+          "$validator" "$vst3" | tee "$WORK/validator.txt"
+          grep -q " 0 tests failed" "$WORK/validator.txt"
+          cli="$WORK/cli-osx-arm64/WhatPlugin.Cli"
+          "$cli" lookup dump --db "$WORK/e2e.db" | grep -q "AGain VST3"
+          runner=$(find build/plugin -name RunnerTest -type f -perm -u+x | head -1)
+          "$runner" "$cli" "$WORK/e2e.db"
+
       # 跨平台界面打成 WhatPlugin.app 装进 .dmg（Apple 芯片和 Intel 各一份），临时签名。
       - name: 打包 WhatPlugin.app 和 .dmg
         run: |
@@ -159,6 +177,12 @@ jobs:
             file "$app/Contents/MacOS/WhatPlugin.Desktop" | grep -q "$want"
             # 扫描器是通用二进制，两份里都是同一个。
             lipo -archs "$app/Contents/MacOS/WhatPluginScanner" | grep -q arm64
+            # 查询插件要用的命令行工具，和查询插件本身（通用二进制，已签名）。
+            test -x "$app/Contents/MacOS/WhatPlugin.Cli"
+            lookup="$app/Contents/Resources/WhatPluginLookup.vst3"
+            lipo -archs "$lookup/Contents/MacOS/WhatPluginLookup" | grep -q x86_64
+            lipo -archs "$lookup/Contents/MacOS/WhatPluginLookup" | grep -q arm64
+            codesign --verify --deep --strict "$lookup"
             if [ $arch = arm64 ]; then
               # 用临时数据库打开 20 秒：没有闪退、数据库建好了、默认位置没被碰。
               "$app/Contents/MacOS/WhatPlugin.Desktop" --db "$WORK/app-smoke.db" > "$WORK/app.log" 2>&1 &

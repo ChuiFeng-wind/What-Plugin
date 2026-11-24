@@ -235,6 +235,45 @@ public sealed class ScanHealthTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void LookupPluginCardInstallsIntoTempVst3Folder()
+    {
+        var window = Open();
+        var settings = Settings(window);
+        // 这台机器上的应用没有带查询插件（开发时、Windows）：不显示卡片。
+        Assert.False(settings.LookupCardVisible);
+
+        var source = Path.Combine(_dir, "Resources", LookupPluginInstaller.BundleName);
+        var target = Path.Combine(_dir, "VST3", LookupPluginInstaller.BundleName);
+        Assert.StartsWith(Path.GetTempPath(), target, StringComparison.OrdinalIgnoreCase);
+        Directory.CreateDirectory(Path.Combine(source, "Contents"));
+        File.WriteAllText(Path.Combine(source, "Contents", "Info.plist"), "plist");
+        settings.LookupPlugin = new LookupPluginInstaller(source, target);
+        settings.Refresh();
+        Settle(window);
+
+        var install = settings.FindControl<Button>("InstallLookupButton")!;
+        Assert.True(settings.LookupCardVisible);
+        Assert.StartsWith("还没有安装", settings.LookupStateText);
+        Assert.Equal("安装到 VST3 文件夹", install.Content);
+        Assert.False(settings.FindControl<Button>("RevealLookupButton")!.IsVisible);
+
+        Click(settings, "InstallLookupButton");
+        Settle(window);
+        Assert.True(File.Exists(Path.Combine(target, "Contents", "Info.plist")));
+        Assert.StartsWith("已安装查询插件", window.Status);
+        Assert.Equal("已安装在：" + target, settings.LookupStateText);
+        Assert.Equal("重新安装", install.Content);
+        Assert.True(settings.FindControl<Button>("RevealLookupButton")!.IsVisible);
+
+        // 应用更新后带的是新版本：提示更新。
+        File.WriteAllText(Path.Combine(source, "Contents", "Info.plist"), "plist v2");
+        settings.Refresh();
+        Settle(window);
+        Assert.Equal("更新", install.Content);
+        Assert.StartsWith("已安装的是旧版本", settings.LookupStateText);
+    }
+
+    [AvaloniaFact]
     public void UsageStatisticsCanBeTurnedOffAndCleared()
     {
         _database.RecordUsage(UsageKinds.Scan, 3);

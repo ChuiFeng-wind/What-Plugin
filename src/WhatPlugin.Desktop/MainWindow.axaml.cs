@@ -57,6 +57,10 @@ public partial class MainWindow : Window, IScanHost
 
         ThemeManager.Apply(_database.GetSetting(ThemeManager.Setting));
         PublishLookupTheme();
+        // DAW 里的查询插件靠这个文件找到命令行工具（打包后在 .app 的 Contents/MacOS 里）。
+        // Windows 上仍由 Windows 版主程序写，免得两个版本互相改。
+        if (AppPlatform.IsMac)
+            LookupExport.PublishCliPath(_databasePath, PluginDatabase.DefaultPath, AppContext.BaseDirectory);
         SetupChrome();
 
         _navDivider = new Border { Height = 1, Margin = new(6, 10), IsHitTestVisible = false };

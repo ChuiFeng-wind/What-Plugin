@@ -90,6 +90,36 @@ public partial class SettingsView : UserControl
         AddVst2FolderButton.Click += async (_, _) => await PickVst2Folders();
         UsageEnabledBox.IsCheckedChanged += (_, _) => UsageEnabled_Changed();
         ClearUsageButton.Click += async (_, _) => await ClearUsage();
+        InstallLookupButton.Click += (_, _) => InstallLookup();
+        RevealLookupButton.Click += (_, _) => { if (SystemShell.Reveal(LookupPlugin.Target) is { } problem) _host.ShowStatus(problem); };
+    }
+
+    /// <summary>应用里带的查询插件和它的安装位置。测试换成临时目录。</summary>
+    public LookupPluginInstaller LookupPlugin { get; set; } = LookupPluginInstaller.ThisComputer();
+
+    public string LookupStateText => LookupState.Text ?? "";
+
+    public bool LookupCardVisible => LookupCard.IsVisible;
+
+    private void ShowLookup()
+    {
+        var state = LookupPlugin.State;
+        LookupCard.IsVisible = state != LookupPluginState.NotBundled;
+        LookupState.Text = LookupPlugin.StateText;
+        InstallLookupButton.Content = state switch
+        {
+            LookupPluginState.Outdated => "更新",
+            LookupPluginState.Installed => "重新安装",
+            _ => "安装到 VST3 文件夹",
+        };
+        RevealLookupButton.IsVisible = state != LookupPluginState.NotInstalled;
+    }
+
+    public void InstallLookup()
+    {
+        var error = LookupPlugin.Install();
+        ShowLookup();
+        _host.ShowStatus(error ?? "已安装查询插件。请在 DAW 里重新扫描插件，再在效果器列表里找 WhatPluginLookup");
     }
 
     /// <summary>重新读取文件夹和扫描结果。每次打开这一页、扫描结束后调用。</summary>
@@ -106,6 +136,7 @@ public partial class SettingsView : UserControl
         ShowUsage();
         RefreshReviewSources();
         SetScanning(_host.IsScanning);
+        ShowLookup();
     }
 
     // ---------- 别人分享的评价 ----------
