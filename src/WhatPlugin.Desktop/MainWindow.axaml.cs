@@ -19,7 +19,7 @@ public partial class MainWindow : Window, IScanHost
     public static readonly IReadOnlyList<NavDefinition> Pages =
     [
         new("Plugins", "插件库", MaterialIconKind.Bookshelf, "按功能、厂家和格式整理已安装的插件", 2),
-        new("Blacklist", "垃圾桶", MaterialIconKind.DeleteOutline, "不想在插件库里看到的插件。文件不会被移动或卸载", 2),
+        new("Blacklist", "垃圾桶", MaterialIconKind.DeleteOutline, LibraryText.TrashSubtitle, 2),
         new("Chains", "混音笔记", MaterialIconKind.LinkVariant, "按混音师、乐器分文件夹，记下每条轨道用了哪些插件、什么顺序、为什么这么用。这里只是记录，不会写入 DAW", 5),
         new("Accounts", "已购账号", MaterialIconKind.KeyOutline, "买过的插件和厂家账号，密码加密保存在本机", 5),
         new("Wishes", "心愿单", MaterialIconKind.HeartOutline, "想买的插件和打折提醒", 5),
@@ -86,6 +86,22 @@ public partial class MainWindow : Window, IScanHost
         ExportButton.Click += async (_, _) => await Transfer.ExportAsync();
         ImportButton.Click += async (_, _) => await Transfer.ImportAsync();
 
+        // 删除版本和卸载只在扫描目录（含用户加的 VST2 文件夹）里动文件。
+        Removal = new RemovalActions(_database, () => _environment.Roots(_database.LoadVst2Folders()).Select(r => r.Path).ToList())
+        {
+            Rescan = RunScanAsync,
+            IsScanning = () => IsScanning,
+        };
+        Removal.StatusChanged += text => StatusText.Text = text;
+        Removal.Changed += () =>
+        {
+            Library("Plugins")?.Load();
+            Library("Blacklist")?.Load();
+            RefreshCounts();
+            RefreshHealth();
+            RefreshProjects();
+        };
+
         Navigate("Plugins");
         Closing += (_, _) =>
         {
@@ -99,6 +115,9 @@ public partial class MainWindow : Window, IScanHost
 
     /// <summary>左下角的导出、导入。</summary>
     public TransferActions Transfer { get; }
+
+    /// <summary>删除多余版本、卸载垃圾桶里的插件、恢复文件。</summary>
+    public RemovalActions Removal { get; }
 
     /// <summary>把各页还在等待自动保存的内容写进数据库。</summary>
     private void FlushPages()
@@ -323,8 +342,8 @@ public partial class MainWindow : Window, IScanHost
         var definition = Pages.First(p => p.Key == key);
         if (key is "Plugins" or "Blacklist")
         {
-            var library = new PluginLibraryView(_database, blacklist: key == "Blacklist");
-            var frame = new PageFrame(definition.Label, definition.Subtitle, library);
+            var library = new PluginLibraryView(_database, blacklist: key == "Blacklist") { Removal = Removal };
+            var frame = new PageFrame(definition.Label, definition.Subtitle, library, library.Actions);
             library.SubtitleChanged += text => frame.Subtitle = text;
             library.StatusChanged += text => StatusText.Text = text;
             // 移入或恢复会改变闲置报告。

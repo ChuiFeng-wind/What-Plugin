@@ -28,13 +28,7 @@ public partial class MainWindow
         return false;
     }
 
-    internal static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1024 * 1024 * 1024 => $"{bytes / 1024d / 1024 / 1024:0.0} GB",
-        >= 1024 * 1024 => $"{bytes / 1024d / 1024:0.0} MB",
-        >= 1024 => $"{bytes / 1024d:0} KB",
-        _ => $"{bytes} B",
-    };
+    internal static string FormatSize(long bytes) => RemovalText.Size(bytes);
 
     // ---------- 详情面板：已安装版本 ----------
 
@@ -46,14 +40,8 @@ public partial class MainWindow
         {
             var exists = RemovalPlanner.PathExists(file.Path);
             var shared = FileOwners.TryGetValue(file.Path, out var owners) && owners.Any(id => id != row.Id);
-            var title = $"{Labels.Format(file.Format)}，{Labels.Arch(file.Arch)}，{Labels.Status(file.Status)}";
-            if (file.SdkCategory.Length > 0)
-                title += $"，自带分类 {file.SdkCategory}";
-            var note = !exists ? "文件已不在，重新扫描后这一行会消失"
-                : shared ? "和其他插件共用这个文件，不能单独删除"
-                : FormatSize(RemovalPlanner.SizeOf(file.Path));
-            if (file.Error != null)
-                note += $"（{file.Error}）";
+            var title = RemovalText.VersionTitle(file);
+            var note = RemovalText.VersionNote(exists, shared, () => RemovalPlanner.SizeOf(file.Path), file.Error);
             return new VersionRow(file, title, note, exists && !shared && !waves && row.Files.Count > 1);
         }).ToList();
         _loadingVersions = false;
@@ -61,9 +49,7 @@ public partial class MainWindow
         InstalledVersionsList.ItemsSource = versions;
         var canDelete = versions.Any(v => v.CanSelect);
         DeleteVersionsButton.Visibility = canDelete ? Visibility.Visible : Visibility.Collapsed;
-        VersionsNote.Text = waves ? "Waves 插件共用 WaveShell，这里不提供删除。"
-            : canDelete ? "可以勾选不需要的版本。文件会移到回收站，可以在这里恢复；至少要留下一个可用的版本。"
-            : "";
+        VersionsNote.Text = RemovalText.VersionsNote(waves, canDelete);
         VersionsNote.Visibility = VersionsNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateDeleteVersionsButton();
 
@@ -82,7 +68,7 @@ public partial class MainWindow
     {
         var count = (InstalledVersionsList.ItemsSource as IEnumerable<VersionRow>)?.Count(v => v.Selected) ?? 0;
         DeleteVersionsButton.IsEnabled = count > 0;
-        DeleteVersionsButton.Content = count > 0 ? $"删除选中的 {count} 个版本…" : "删除选中的版本…";
+        DeleteVersionsButton.Content = RemovalText.DeleteVersionsButton(count);
     }
 
     private async void DeleteVersions_Click(object sender, RoutedEventArgs e)
@@ -100,16 +86,10 @@ public partial class MainWindow
             return;
         }
 
-        var message = new StringBuilder("这些文件会移到回收站，可以在这里恢复：\n");
-        foreach (var version in chosen)
-            message.Append($"\n{Labels.Format(version.File.Format)}：{version.File.Path}");
         var projects = _report.Usage.GetValueOrDefault(row.Key)?.Projects ?? 0;
-        if (projects > 0)
-            message.Append($"\n\n这款插件有 {projects} 个工程用过。现有记录分不清工程用的是哪个格式，旧工程可能依赖这个版本。");
-        if (UninstallMatcher.Find(row, InstalledPrograms.Load()).Exact is { IsMsi: true })
-            message.Append("\n\n这款插件是 MSI 安装的，修复或更新时可能把文件装回来。");
-        message.Append("\n\n官方卸载程序和它的记录不会被改动；卸载程序遇到文件已被删除时的表现，无法保证所有厂商都一致。");
-        if (!Dialogs.Confirm(this, "删除这些版本？", message.ToString(), "移到回收站", danger: true))
+        var msi = UninstallMatcher.Find(row, InstalledPrograms.Load()).Exact is { IsMsi: true };
+        var message = RemovalText.ConfirmDeleteVersions(chosen.Select(v => v.File), projects, msi);
+        if (!Dialogs.Confirm(this, "删除这些版本？", message, RemovalText.MoveConfirm, danger: true))
             return;
 
         _removalBusy = true;
@@ -118,7 +98,7 @@ public partial class MainWindow
             var files = chosen.Select(v => (row, new RemovableFile(v.File.Path, v.File.Format, RemovalPlanner.SizeOf(v.File.Path)))).ToList();
             var results = await RecycleAsync(files);
             await RunScanAsync(full: false, EveryFormat);
-            StatusText.Text = DescribeRecycle(results, "已把 {0} 个版本移到回收站，可以在详情里恢复");
+            StatusText.Text = RemovalText.VersionsMoved(results);
         }
         finally
         {
@@ -128,7 +108,7 @@ public partial class MainWindow
 
     private async Task<IReadOnlyList<FileOpResult>> RecycleAsync(IReadOnlyList<(PluginRow Plugin, RemovableFile File)> files)
     {
-        StatusText.Text = "正在移到回收站…";
+        StatusText.Text = RemovalText.Moving;
         var results = await FileOpRunner.RunAsync(new FileOpRequest(FileOpKind.Recycle, files.Select(f => f.File.Path).ToList(), _database.LoadVst2Folders()));
         foreach (var (plugin, file) in files)
         {
@@ -136,19 +116,6 @@ public partial class MainWindow
                 _database.SaveRemovedFile(plugin.Key, plugin.Name, file.Path, file.Format, file.Size, DateTime.UtcNow);
         }
         return results;
-    }
-
-    private static string DescribeRecycle(IReadOnlyList<FileOpResult> results, string success)
-    {
-        var ok = results.Count(r => r.Ok);
-        var text = string.Format(success, ok);
-        var unconfirmed = results.Count(r => r.Ok && r.Unconfirmed);
-        if (unconfirmed > 0)
-            text += $"；其中 {unconfirmed} 个没能在回收站里确认";
-        var failed = results.FirstOrDefault(r => !r.Ok);
-        if (failed != null)
-            text = (ok > 0 ? text + "；" : "") + $"{results.Count(r => !r.Ok)} 个失败：{failed.Error}";
-        return text;
     }
 
     private void RestoreVersion_Click(object sender, RoutedEventArgs e)
@@ -165,17 +132,17 @@ public partial class MainWindow
         _removalBusy = true;
         try
         {
-            StatusText.Text = "正在从回收站恢复…";
+            StatusText.Text = RemovalText.Restoring;
             var result = (await FileOpRunner.RunAsync(new FileOpRequest(FileOpKind.Restore, [file.Path], _database.LoadVst2Folders())))[0];
             // 回收站已清空时这条记录再也用不上。
-            if (result.Ok || result.Error == "回收站里已经没有这个文件")
+            if (RemovalText.ShouldForget(result))
                 _database.DeleteRemovedFile(file.Path);
             if (result.Ok)
                 await RunScanAsync(full: false, EveryFormat);
             else if (_current != null)
                 ShowInstalledVersions(_current.Row);
             UpdateRemovedFilesButton();
-            StatusText.Text = result.Ok ? $"已恢复 {file.Path}" : $"恢复失败：{result.Error}";
+            StatusText.Text = RemovalText.Restored(result);
         }
         finally
         {
@@ -190,20 +157,20 @@ public partial class MainWindow
     {
         var count = PluginGrid.SelectedItems.Count;
         UninstallButton.IsEnabled = count > 0;
-        UninstallButton.Content = count > 0 ? $"卸载选中的 {count} 款…" : "卸载选中的插件…";
+        UninstallButton.Content = RemovalText.UninstallButton(count);
     }
 
     private void UpdateRemovedFilesButton()
     {
         var count = _database.LoadRemovedFiles().Count;
-        RemovedFilesButton.Content = $"已移除的文件（{count}）";
+        RemovedFilesButton.Content = RemovalText.RemovedFilesButton(count);
         RemovedFilesButton.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateUninstallHistoryButton()
     {
         var count = _database.LoadUninstallHistory().Count;
-        UninstallHistoryButton.Content = count > 0 ? $"卸载历史（{count}）" : "卸载历史";
+        UninstallHistoryButton.Content = RemovalText.HistoryButton(count);
     }
 
     private void UninstallHistory_Click(object sender, RoutedEventArgs e)
@@ -353,48 +320,13 @@ public partial class MainWindow
     /// <summary>以磁盘上实际还在的文件为准报告，并把已经没有文件的插件移出垃圾桶。</summary>
     private void ReportUninstall(IReadOnlyList<UninstallChoice> choices, IReadOnlyList<FileOpResult> recycled)
     {
-        var report = new StringBuilder();
-        var gone = new List<long>();
-        var history = new List<UninstallRecord>();
-        foreach (var choice in choices)
-        {
-            var row = choice.Plan.Plugin;
-            var left = row.Files.Select(f => f.Path).Where(RemovalPlanner.PathExists).ToList();
-            if (left.Count == 0)
-            {
-                gone.Add(row.Id);
-                var way = choice.Method switch
-                {
-                    UninstallMethod.Official => UninstallWay.Official,
-                    UninstallMethod.RecycleFiles => UninstallWay.RecycleFiles,
-                    _ => UninstallWay.FoundMissing,
-                };
-                history.Add(UninstallHistory.From(row, way, choice.Reason, DateTime.UtcNow));
-                report.AppendLine($"{row.Name}：文件已全部移除");
-                continue;
-            }
-            report.AppendLine($"{row.Name}：还剩 {left.Count} 个文件");
-            foreach (var path in left)
-            {
-                var failed = recycled.FirstOrDefault(r => !r.Ok && string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
-                report.AppendLine("  " + path + (failed != null ? $"（{failed.Error}）" : ""));
-            }
-        }
-
-        var unconfirmed = recycled.Count(r => r.Ok && r.Unconfirmed);
-        if (unconfirmed > 0)
-            report.AppendLine().AppendLine($"有 {unconfirmed} 个文件已不在原位，但没能在回收站里确认。");
-        if (recycled.Any(r => r.Ok))
-            report.AppendLine().AppendLine("移到回收站的文件，可以在垃圾桶页的“已移除的文件”里恢复。");
-
-        _database.AddUninstallRecords(history);
-        if (history.Count > 0)
-            report.AppendLine().AppendLine($"已记进垃圾桶的“卸载历史”：{string.Join("、", history.Select(h => h.Name))}");
-        _database.ForgetUninstalled(gone);
+        var report = RemovalText.Report(choices, recycled, DateTime.UtcNow);
+        _database.AddUninstallRecords(report.History);
+        _database.ForgetUninstalled(report.Gone);
         LoadPlugins();
         UpdateUninstallHistoryButton();
-        Dialogs.ShowText(this, "卸载结果", report.ToString().TrimEnd(), "卸载结果.txt");
-        StatusText.Text = $"卸载结束：{gone.Count} 款已移除，{choices.Count - gone.Count} 款还有文件";
+        Dialogs.ShowText(this, "卸载结果", report.Text, "卸载结果.txt");
+        StatusText.Text = report.Status;
     }
 }
 
@@ -430,7 +362,7 @@ public sealed class VersionRow(MergedFile file, string title, string note, bool 
 public sealed class RemovedFileRow(RemovedFile file)
 {
     public RemovedFile File { get; } = file;
-    public string Title { get; } = $"{Labels.Format(file.Format)}，{MainWindow.FormatSize(file.Size)}，{file.RemovedUtc.ToLocalTime():yyyy-MM-dd} 移除";
+    public string Title { get; } = RemovalText.RemovedTitle(file);
     public string Path => File.Path;
     public string RestoreName => "恢复 " + File.Path;
 
@@ -454,10 +386,7 @@ internal static class WavesUninstallDialog
         };
         WindowEffects.ApplyDialog(window);
 
-        var names = string.Join("、", waves.Select(w => w.Name).Take(6)) + (waves.Count > 6 ? $" 等 {waves.Count} 款" : "");
-        var message = $"{names} 是 Waves 插件。它们共用 WaveShell，不能像普通插件一样删文件，否则其他 Waves 插件也会受影响。\n\n"
-            + "只卸载这几款：打开 Waves Central，在已安装的产品里选中它们后卸载。如果 Waves Central 看不到它们，就只能用下面的完全卸载工具。\n\n"
-            + "完全卸载全部 Waves：所有 Waves 插件都会消失，残留可能影响之后重装，所以要用专门的工具。打开工具后先只读检查，你确认后才会动手。";
+        var message = RemovalText.WavesMessage(waves, fullTool: true);
         var body = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, LineHeight = 21, Margin = new Thickness(0, 10, 0, 0) };
         body.SetResourceReference(TextBlock.ForegroundProperty, "TextDim");
         AutomationProperties.SetAutomationId(body, "DialogMessage");
@@ -593,7 +522,7 @@ internal static class RemovedFilesDialog
 
         var heading = new StackPanel();
         heading.Children.Add(new TextBlock { Text = "已移除的文件", FontSize = 17, FontWeight = FontWeights.SemiBold });
-        var hint = new TextBlock { Text = "这些文件在回收站里。清空回收站后就不能再从这里恢复了。", FontSize = 12, Margin = new Thickness(0, 4, 0, 10), TextWrapping = TextWrapping.Wrap };
+        var hint = new TextBlock { Text = RemovalText.RemovedFilesHint, FontSize = 12, Margin = new Thickness(0, 4, 0, 10), TextWrapping = TextWrapping.Wrap };
         hint.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
         heading.Children.Add(hint);
         DockPanel.SetDock(heading, Dock.Top);

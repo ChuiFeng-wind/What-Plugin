@@ -41,7 +41,7 @@ public static class UninstallHistory
     public static string WayText(UninstallWay way) => way switch
     {
         UninstallWay.Official => "官方卸载程序",
-        UninstallWay.RecycleFiles => "文件移到回收站",
+        UninstallWay.RecycleFiles => "文件移到" + PluginTrash.Name,
         UninstallWay.WavesTool => "Waves 卸载工具",
         UninstallWay.FoundMissing => "扫描时发现已不在",
         _ => "方式未知",

@@ -12,7 +12,7 @@ namespace WhatPlugin.Core;
 /// </summary>
 public sealed partial class PluginDatabase : IDisposable
 {
-    private const int SchemaVersion = 15;
+    private const int SchemaVersion = 16;
 
     private readonly SqliteConnection _connection;
     private readonly object _gate = new();
@@ -437,6 +437,13 @@ public sealed partial class PluginDatabase : IDisposable
                 """);
         }
 
+        if (current < 16)
+        {
+            // Mac 的废纸篓没有回收站那样的记录可查，移走时记下文件在废纸篓里的位置，恢复时用。
+            if (!ColumnExists(transaction, "removed_files", "trash_path"))
+                Execute(transaction, "ALTER TABLE removed_files ADD COLUMN trash_path TEXT NOT NULL DEFAULT '';");
+        }
+
         Execute(transaction, $"PRAGMA user_version = {SchemaVersion};");
         transaction.Commit();
     }
@@ -615,14 +622,15 @@ public sealed partial class PluginDatabase : IDisposable
 
     // ---------- 移到回收站的插件文件，用于恢复和“又被装回来”的提示。 ----------
 
-    public void SaveRemovedFile(string pluginKey, string pluginName, string path, PluginFormat format, long size, DateTime removedUtc)
+    /// <param name="trashPath">Mac：文件在废纸篓里的位置。Windows 不用（从回收站记录里找）。</param>
+    public void SaveRemovedFile(string pluginKey, string pluginName, string path, PluginFormat format, long size, DateTime removedUtc, string trashPath = "")
     {
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
             command.CommandText = """
-                INSERT OR REPLACE INTO removed_files (path, plugin_key, plugin_name, format, size, removed_utc)
-                VALUES ($path, $key, $name, $format, $size, $removed)
+                INSERT OR REPLACE INTO removed_files (path, plugin_key, plugin_name, format, size, removed_utc, trash_path)
+                VALUES ($path, $key, $name, $format, $size, $removed, $trash)
                 """;
             command.Parameters.AddWithValue("$path", path);
             command.Parameters.AddWithValue("$key", pluginKey);
@@ -630,6 +638,7 @@ public sealed partial class PluginDatabase : IDisposable
             command.Parameters.AddWithValue("$format", (int)format);
             command.Parameters.AddWithValue("$size", size);
             command.Parameters.AddWithValue("$removed", removedUtc.ToString("O"));
+            command.Parameters.AddWithValue("$trash", trashPath);
             command.ExecuteNonQuery();
         }
     }
@@ -639,7 +648,7 @@ public sealed partial class PluginDatabase : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = "SELECT path, plugin_key, plugin_name, format, size, removed_utc FROM removed_files ORDER BY removed_utc DESC, path";
+            command.CommandText = "SELECT path, plugin_key, plugin_name, format, size, removed_utc, trash_path FROM removed_files ORDER BY removed_utc DESC, path";
             using var reader = command.ExecuteReader();
             var files = new List<RemovedFile>();
             while (reader.Read())
@@ -650,7 +659,8 @@ public sealed partial class PluginDatabase : IDisposable
                     reader.GetString(2),
                     (PluginFormat)reader.GetInt32(3),
                     reader.GetInt64(4),
-                    DateTime.Parse(reader.GetString(5), null, System.Globalization.DateTimeStyles.RoundtripKind)));
+                    DateTime.Parse(reader.GetString(5), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                    reader.GetString(6)));
             }
             return files;
         }

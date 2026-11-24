@@ -201,7 +201,8 @@ public static partial class UninstallMatcher
 
 public sealed record RemovableFile(string Path, PluginFormat Format, long Size);
 
-public sealed record RemovedFile(string Path, string PluginKey, string PluginName, PluginFormat Format, long Size, DateTime RemovedUtc);
+/// <param name="TrashPath">Mac：在废纸篓里的位置；Windows 为空（从回收站记录里找）。</param>
+public sealed record RemovedFile(string Path, string PluginKey, string PluginName, PluginFormat Format, long Size, DateTime RemovedUtc, string TrashPath = "");
 
 /// <summary>垃圾桶里一款插件的卸载方案。Files 已去掉和别的插件共用的文件。</summary>
 public sealed record UninstallPlan(
@@ -318,11 +319,13 @@ public static class RemovalPlanner
 
 /// <summary>
 /// 文件操作的路径白名单。提权后的进程也用它检查，所以请求内容不被信任：
-/// 只有插件文件夹里的插件文件才能被移动。
+/// 只有插件文件夹里的插件文件才能被移动。Windows 和 Mac 共用，Mac 上多认 AU（.component）。
 /// </summary>
 public static class RemovalGuard
 {
-    private static readonly string[] Extensions = [".vst3", ".dll", ".clap", ".aaxplugin", ".vst"];
+    private static readonly string[] Extensions = [".vst3", ".dll", ".clap", ".aaxplugin", ".vst", ".component"];
+
+    private static char Separator => Path.DirectorySeparatorChar;
 
     /// <returns>拒绝的原因；可以操作时返回 null。</returns>
     public static string? Reject(string path, IEnumerable<string> extraRoots, bool mustExist = true)
@@ -334,11 +337,10 @@ public static class RemovalGuard
             return "路径无效";
         if (!Extensions.Contains(Path.GetExtension(full), StringComparer.OrdinalIgnoreCase))
             return "不是插件文件";
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        if (full.StartsWith(windows + "\\", StringComparison.OrdinalIgnoreCase))
+        if (SystemFolders().Any(f => full.StartsWith(f + Separator, StringComparison.OrdinalIgnoreCase)))
             return "在系统文件夹里";
 
-        var root = AllowedRoots(extraRoots).FirstOrDefault(r => full.StartsWith(r + "\\", StringComparison.OrdinalIgnoreCase));
+        var root = AllowedRoots(extraRoots).FirstOrDefault(r => full.StartsWith(r + Separator, StringComparison.OrdinalIgnoreCase));
         if (root == null)
             return "不在插件文件夹里";
         if (mustExist && !RemovalPlanner.PathExists(full))
@@ -347,24 +349,52 @@ public static class RemovalGuard
         // 符号链接和目录联接指向别处，移动它们的结果和看到的路径不一致。
         for (var current = full; current.Length > root.Length; current = Path.GetDirectoryName(current)!)
         {
-            if (RemovalPlanner.PathExists(current) && File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint))
+            if (IsLink(current))
                 return "路径里有链接";
         }
         return null;
     }
 
+    private static bool IsLink(string path)
+    {
+        try
+        {
+            // 断掉的链接 PathExists 为假，但 LinkTarget 仍然有值。
+            if (new FileInfo(path).LinkTarget != null)
+                return true;
+            return RemovalPlanner.PathExists(path) && File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>不能动的系统文件夹。Mac 的插件目录在 /Library 下，所以只挡系统自己的目录。</summary>
+    private static IEnumerable<string> SystemFolders()
+    {
+        if (AppPlatform.IsMac)
+            return ["/System", "/usr", "/bin", "/sbin", "/private/etc", "/private/var/db"];
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        return windows.Length > 0 ? [windows] : [];
+    }
+
     private static IEnumerable<string> AllowedRoots(IEnumerable<string> extraRoots)
     {
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         foreach (var (root, _) in PluginDiscovery.DefaultRoots())
             yield return Path.TrimEndingDirectorySeparator(root);
+        var home = Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
         foreach (var extra in extraRoots)
         {
             if (!Path.IsPathFullyQualified(extra))
                 continue;
             var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(extra));
-            // 整个驱动器或系统文件夹不能当作插件文件夹。
-            if (root.Length > 3 && !root.StartsWith(windows, StringComparison.OrdinalIgnoreCase))
+            // 整个驱动器、用户文件夹或系统文件夹不能当作插件文件夹。
+            var tooBroad = root.Length <= 3
+                || string.Equals(root, home, StringComparison.OrdinalIgnoreCase)
+                || (AppPlatform.IsMac && root.Count(c => c == '/') < 2)
+                || SystemFolders().Any(f => string.Equals(root, f, StringComparison.OrdinalIgnoreCase) || root.StartsWith(f + Separator, StringComparison.OrdinalIgnoreCase));
+            if (!tooBroad)
                 yield return root;
         }
     }
@@ -493,7 +523,8 @@ public enum FileOpKind { Recycle, Restore, WavesRecycle, WavesRegistry }
 public sealed record FileOpRequest(FileOpKind Kind, IReadOnlyList<string> Paths, IReadOnlyList<string> ExtraRoots);
 
 /// <param name="Unconfirmed">文件已不在原位，但回收站里找不到记录。</param>
-public sealed record FileOpResult(string Path, bool Ok, string? Error = null, bool AccessDenied = false, bool Unconfirmed = false);
+/// <param name="TrashPath">Mac：文件在废纸篓里的位置，恢复时要用。Windows 从回收站记录里找，不用它。</param>
+public sealed record FileOpResult(string Path, bool Ok, string? Error = null, bool AccessDenied = false, bool Unconfirmed = false, string? TrashPath = null);
 
 /// <summary>实际移动文件。普通权限和提权后走的都是这里，每个路径都重新过白名单。</summary>
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -564,7 +595,7 @@ public static class FileOpExecutor
             return new FileOpResult(path, false, rejected);
         var entry = RecycleBin.Find(path, binFolder);
         if (entry == null)
-            return new FileOpResult(path, false, "回收站里已经没有这个文件");
+            return new FileOpResult(path, false, PluginTrash.Gone);
         try
         {
             RecycleBin.Restore(entry);

@@ -55,6 +55,18 @@ public interface IDialogs
 
     /// <summary>并排对比自己和别人的评价。</summary>
     Task CompareReviews(PluginRow row, IReadOnlyList<AttributedReview> others);
+
+    /// <summary>每款插件选卸载方式和原因。取消返回 null。</summary>
+    Task<IReadOnlyList<UninstallChoice>?> Uninstall(IReadOnlyList<UninstallPlan> plans);
+
+    /// <summary>选中了 Waves 插件时的说明。</summary>
+    Task<WavesAnswer> WavesNotice(IReadOnlyList<PluginRow> waves, int otherCount);
+
+    /// <summary>已移除的文件，选一个恢复。关闭返回 null。</summary>
+    Task<RemovedFile?> RemovedFiles(IReadOnlyList<RemovedFile> files);
+
+    /// <summary>卸载历史。返回是否改过（删除记录或改原因）。</summary>
+    Task<bool> UninstallHistory(PluginDatabase database, IReadOnlyList<PluginRow> plugins);
 }
 
 /// <summary>弹出真正的窗口。owner 是对话框所属的窗口。</summary>
@@ -154,6 +166,24 @@ public sealed class WindowDialogs(Func<Window?> owner) : IDialogs
     {
         if (owner() is { } window)
             await new ReviewCompareDialog(row, others).ShowDialog(window);
+    }
+
+    public async Task<IReadOnlyList<UninstallChoice>?> Uninstall(IReadOnlyList<UninstallPlan> plans) =>
+        owner() is { } window ? await new UninstallDialog(plans).ShowDialog<IReadOnlyList<UninstallChoice>?>(window) : null;
+
+    public async Task<WavesAnswer> WavesNotice(IReadOnlyList<PluginRow> waves, int otherCount) =>
+        owner() is { } window && await new WavesNoticeDialog(waves, otherCount).ShowDialog<object?>(window) is WavesAnswer answer ? answer : WavesAnswer.Cancel;
+
+    public async Task<RemovedFile?> RemovedFiles(IReadOnlyList<RemovedFile> files) =>
+        owner() is { } window ? await new RemovedFilesDialog(files).ShowDialog<RemovedFile?>(window) : null;
+
+    public async Task<bool> UninstallHistory(PluginDatabase database, IReadOnlyList<PluginRow> plugins)
+    {
+        if (owner() is not { } window)
+            return false;
+        var dialog = new UninstallHistoryDialog(database, plugins);
+        await dialog.ShowDialog(window);
+        return dialog.Changed;
     }
 }
 

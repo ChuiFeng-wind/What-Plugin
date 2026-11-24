@@ -181,6 +181,19 @@
                             </Grid>
                             <Button x:Name="ResetButton" Content="恢复自动分类、音色和厂家" Classes="Ghost" Height="34" HorizontalAlignment="Left" Margin="-10,8,0,0"/>
 
+                            <!-- 已安装版本：可以把多余的格式移到回收站（Mac 上是废纸篓），也可以从那里恢复。 -->
+                            <StackPanel x:Name="VersionsSection" IsVisible="False">
+                                <Border Height="1" Background="{DynamicResource Line}" Margin="0,14,0,0"/>
+                                <TextBlock Text="已安装版本" Classes="FieldLabel"/>
+                                <StackPanel x:Name="VersionsList" Spacing="6"/>
+                                <TextBlock x:Name="VersionsNote" Classes="SmallNote" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                <Button x:Name="DeleteVersionsButton" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                                <StackPanel x:Name="RemovedVersionsPanel" IsVisible="False">
+                                    <TextBlock Text="已移除的版本" Classes="FieldLabel"/>
+                                    <StackPanel x:Name="RemovedVersionsList"/>
+                                </StackPanel>
+                            </StackPanel>
+
                             <Border Height="1" Background="{DynamicResource Line}" Margin="0,14,0,0"/>
                             <TextBlock Text="移入原因（选填）" Classes="FieldLabel"/>
                             <TextBox x:Name="ReasonBox" Classes="Multiline" MinHeight="34" MaxHeight="80" AutomationProperties.Name="移入原因"/>

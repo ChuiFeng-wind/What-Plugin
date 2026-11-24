@@ -72,4 +72,29 @@ public static class SystemShell
             return openFolder(folder) ?? $"工程文件已经不在了，打开了它原来所在的文件夹：{folder}";
         return $"找不到工程文件：{path}";
     }
+
+    /// <summary>打开 Waves Central，让用户在里面卸载 Waves 产品。没装时返回说明。</summary>
+    public static string? OpenWavesCentral()
+    {
+        try
+        {
+            if (OperatingSystem.IsMacOS())
+            {
+                const string app = "/Applications/Waves Central.app";
+                if (!Directory.Exists(app))
+                    return "没有找到 Waves Central，请先从 Waves 官网安装。";
+                Process.Start(new ProcessStartInfo("open", [app]) { UseShellExecute = false });
+                return null;
+            }
+            var exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Waves Central", "Waves Central.exe");
+            if (!File.Exists(exe))
+                return "没有找到 Waves Central，请先从 Waves 官网安装。";
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+            return null;
+        }
+        catch (Exception error) when (error is Win32Exception or IOException or InvalidOperationException)
+        {
+            return "打开失败：" + error.Message;
+        }
+    }
 }

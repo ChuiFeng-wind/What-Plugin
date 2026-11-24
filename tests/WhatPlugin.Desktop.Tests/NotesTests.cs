@@ -112,6 +112,31 @@ public sealed class ScriptedDialogs : IDialogs
         Compared.Add((row, others));
         return Task.CompletedTask;
     }
+
+    /// <summary>卸载对话框收到的方案。回答可以是函数（按方案挑选择）。</summary>
+    public List<IReadOnlyList<UninstallPlan>> UninstallPlans { get; } = [];
+
+    public Task<IReadOnlyList<UninstallChoice>?> Uninstall(IReadOnlyList<UninstallPlan> plans)
+    {
+        UninstallPlans.Add(plans);
+        var answer = Next<object?>("卸载");
+        return Task.FromResult(answer is Func<IReadOnlyList<UninstallPlan>, IReadOnlyList<UninstallChoice>?> pick ? pick(plans) : (IReadOnlyList<UninstallChoice>?)answer);
+    }
+
+    public Task<WavesAnswer> WavesNotice(IReadOnlyList<PluginRow> waves, int otherCount) =>
+        Task.FromResult(Next<WavesAnswer>($"Waves｜{waves.Count}｜{otherCount}"));
+
+    public Task<RemovedFile?> RemovedFiles(IReadOnlyList<RemovedFile> files)
+    {
+        var answer = Next<object?>("已移除的文件");
+        return Task.FromResult(answer is Func<IReadOnlyList<RemovedFile>, RemovedFile?> pick ? pick(files) : (RemovedFile?)answer);
+    }
+
+    public Task<bool> UninstallHistory(PluginDatabase database, IReadOnlyList<PluginRow> plugins)
+    {
+        var answer = Next<object?>("卸载历史");
+        return Task.FromResult(answer is Func<PluginDatabase, bool> act ? act(database) : (bool)answer!);
+    }
 }
 
 /// <summary>混音笔记：树、步骤和备选、标签、心愿单、多选、路由和从工程导入轨道。数据库和工程都在临时目录。</summary>

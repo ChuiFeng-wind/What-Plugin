@@ -45,6 +45,8 @@ public partial class PluginLibraryView : UserControl
     private IReadOnlyList<AttributedReview> _currentShared = [];
     private long? _sharedSourceId;
     private bool _loadingShared;
+    private readonly List<(VersionInfo Info, CheckBox Box)> _versions = [];
+    private RemovalActions? _removal;
 
     public bool Blacklist { get; }
 
@@ -102,7 +104,168 @@ public partial class PluginLibraryView : UserControl
         AdoptReviewButton.Click += async (_, _) => await AdoptReviewAsync();
         CompareReviewsButton.Click += async (_, _) => await CompareReviewsAsync();
 
+        DeleteVersionsButton.Click += async (_, _) => await DeleteVersionsAsync();
+        if (blacklist)
+        {
+            // 垃圾桶里可以一次选几款一起卸载（按住 Ctrl 或 Command 多选）。
+            PluginList.SelectionMode = SelectionMode.Multiple;
+            Actions = BuildRemovalActions();
+        }
+
         UpdateColumns(0);
+    }
+
+    /// <summary>垃圾桶页标题右边的按钮：卸载、已移除的文件、卸载历史。插件库页没有。</summary>
+    public Control? Actions { get; }
+
+    public Button UninstallButton { get; } = new() { Name = "UninstallButton", Classes = { "Danger" }, Margin = new Thickness(8, 0, 0, 0) };
+
+    public Button RemovedFilesButton { get; } = new() { Name = "RemovedFilesButton", Classes = { "Ghost" }, Margin = new Thickness(8, 0, 0, 0) };
+
+    public Button UninstallHistoryButton { get; } = new() { Name = "UninstallHistoryButton", Classes = { "Ghost" }, Margin = new Thickness(8, 0, 0, 0) };
+
+    /// <summary>删除版本、卸载和恢复。由主窗口提供；没有时不显示这些功能。</summary>
+    public RemovalActions? Removal
+    {
+        get => _removal;
+        set
+        {
+            _removal = value;
+            UpdateRemovalButtons();
+            if (_current != null)
+                ShowVersions(_current.Row);
+        }
+    }
+
+    private Control BuildRemovalActions()
+    {
+        UninstallButton.Click += async (_, _) => await UninstallSelectedAsync();
+        RemovedFilesButton.Click += async (_, _) =>
+        {
+            if (Removal != null)
+                await Removal.ShowRemovedFilesAsync(Dialogs);
+        };
+        UninstallHistoryButton.Click += async (_, _) =>
+        {
+            if (Removal != null)
+                await Removal.ShowHistoryAsync(Dialogs);
+        };
+        ToolTip.SetTip(UninstallButton, $"把选中插件的文件移到{PluginTrash.Name}。按住 {AppPlatform.CommandKeyName} 可以多选");
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(UninstallHistoryButton);
+        panel.Children.Add(RemovedFilesButton);
+        panel.Children.Add(UninstallButton);
+        UpdateRemovalButtons();
+        return panel;
+    }
+
+    /// <summary>垃圾桶里选中的插件（多选）。</summary>
+    public IReadOnlyList<PluginItem> SelectedMany => PluginList.SelectedItems?.OfType<PluginItem>().ToList() ?? [];
+
+    /// <summary>垃圾桶里按名称多选（测试用）。</summary>
+    public void SelectMany(params string[] names)
+    {
+        PluginList.SelectedItems?.Clear();
+        foreach (var item in Shown.Where(p => names.Contains(p.Name)))
+            PluginList.SelectedItems?.Add(item);
+    }
+
+    private void UpdateRemovalButtons()
+    {
+        if (!Blacklist)
+            return;
+        var available = _removal != null;
+        var count = SelectedMany.Count(p => !p.Row.IsMissing);
+        UninstallButton.Content = RemovalText.UninstallButton(count);
+        UninstallButton.IsEnabled = available && count > 0;
+        UninstallButton.IsVisible = available;
+        var removed = available ? _database.LoadRemovedFiles().Count : 0;
+        RemovedFilesButton.Content = RemovalText.RemovedFilesButton(removed);
+        RemovedFilesButton.IsVisible = removed > 0;
+        UninstallHistoryButton.Content = RemovalText.HistoryButton(available ? _database.LoadUninstallHistory().Count : 0);
+        UninstallHistoryButton.IsVisible = available;
+    }
+
+    public async Task UninstallSelectedAsync()
+    {
+        if (Removal == null)
+            return;
+        SaveCurrent(force: true);
+        await Removal.UninstallAsync(Dialogs, SelectedMany.Select(p => p.Row).ToList(), _report?.Usage ?? new Dictionary<string, PluginUsage>());
+    }
+
+    // ---------- 详情：已安装版本 ----------
+
+    /// <summary>详情里可以勾选的版本（测试用）。</summary>
+    public IReadOnlyList<(VersionInfo Info, CheckBox Box)> VersionRows => _versions;
+
+    public bool VersionsVisible => VersionsSection.IsVisible;
+
+    public int RemovedVersionCount => RemovedVersionsPanel.IsVisible ? RemovedVersionsList.Children.Count : 0;
+
+    private void ShowVersions(PluginRow row)
+    {
+        _versions.Clear();
+        VersionsList.Children.Clear();
+        RemovedVersionsList.Children.Clear();
+        VersionsSection.IsVisible = _removal != null && row.Files.Count > 0;
+        if (_removal == null)
+            return;
+
+        foreach (var info in _removal.Versions(row))
+        {
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Text = info.Title, TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = info.File.Path, Classes = { "SmallNote" }, TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = info.Note, Classes = { "SmallNote" }, TextWrapping = TextWrapping.Wrap });
+            if (!info.CanSelect)
+            {
+                text.Margin = new Thickness(28, 0, 0, 0);
+                VersionsList.Children.Add(text);
+                continue;
+            }
+            var box = new CheckBox { Content = text };
+            AutomationProperties.SetName(box, info.Title + " " + info.File.Path);
+            box.IsCheckedChanged += (_, _) => UpdateDeleteVersionsButton();
+            _versions.Add((info, box));
+            VersionsList.Children.Add(box);
+        }
+        var canDelete = _versions.Count > 0;
+        VersionsNote.Text = RemovalText.VersionsNote(RemovalPlanner.IsWaves(row), canDelete);
+        VersionsNote.IsVisible = VersionsNote.Text.Length > 0;
+        DeleteVersionsButton.IsVisible = canDelete;
+        UpdateDeleteVersionsButton();
+
+        var removed = _removal.RemovedFor(row);
+        foreach (var file in removed)
+            RemovedVersionsList.Children.Add(RemovedFilesDialog.RemovedFileLine(file, () => _ = RestoreAsync(file)));
+        RemovedVersionsPanel.IsVisible = removed.Count > 0;
+    }
+
+    private void UpdateDeleteVersionsButton()
+    {
+        var count = _versions.Count(v => v.Box.IsChecked == true);
+        DeleteVersionsButton.IsEnabled = count > 0;
+        DeleteVersionsButton.Content = RemovalText.DeleteVersionsButton(count);
+    }
+
+    public async Task DeleteVersionsAsync()
+    {
+        if (_current == null || Removal == null)
+            return;
+        SaveCurrent(force: true);
+        var chosen = _versions.Where(v => v.Box.IsChecked == true).Select(v => v.Info.File).ToList();
+        if (chosen.Count == 0)
+            return;
+        await Removal.DeleteVersionsAsync(Dialogs, _current.Row, chosen, _current.Usage?.Projects ?? 0);
+    }
+
+    public async Task RestoreAsync(RemovedFile file)
+    {
+        if (Removal == null)
+            return;
+        SaveCurrent(force: true);
+        await Removal.RestoreAsync(file);
     }
 
     /// <summary>问用户的对话框；测试换成按脚本回答的实现。</summary>
@@ -128,6 +291,7 @@ public partial class PluginLibraryView : UserControl
         else
             ApplyFilter();
         Select(_plugins.FirstOrDefault(p => p.Row.Id == selectedId));
+        UpdateRemovalButtons();
     }
 
     private bool InView(PluginItem item) => item.Row.User.Hidden == Blacklist;
@@ -394,6 +558,7 @@ public partial class PluginLibraryView : UserControl
 
     private void PluginList_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
+        UpdateRemovalButtons();
         if (_suppressSelection)
             return;
         SelectionChangedTo(PluginList.SelectedItem as PluginItem);
@@ -448,6 +613,7 @@ public partial class PluginLibraryView : UserControl
         RebuildChips();
         RebuildTimbreChips();
         ShowSharedReviews(row);
+        ShowVersions(row);
     }
 
     // ---------- 别人分享的评价 ----------
